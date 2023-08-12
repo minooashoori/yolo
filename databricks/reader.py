@@ -378,8 +378,13 @@ if __name__ == "__main__":
     train_df_1 = spark.read.parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/metadata/")
     train_df_2 = spark.read.parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/extra/metadata/")
     
+    
+    train_df_1 = train_df_1.select("asset_id", "width", "height", "boxes", "uri", "box_type")
+    train_df_2 = train_df_2.select("asset_id", "width", "height", "boxes", "uri", "box_type")
+    
     # stack the two dataframes and remove duplicates based on asset_id
     train_df = train_df_1.union(train_df_2).dropDuplicates(["asset_id"])
+
     
     # save the stacked dataframe
     train_df.write.mode("overwrite").parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/complete/")
