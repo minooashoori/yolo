@@ -18,7 +18,7 @@ class ReadProcessBoxes:
     """
     This class reads pickled metadata and images from s3 and return a preprocessed merged spark dataframe
     """
-    accepted_pickle_formats = ["pkl", "pickle"]
+    accepted_formats = ["pkl", "pickle", "parquet"]
     
     def __init__(self,
                  filepath_metadata: str = None,
@@ -51,8 +51,8 @@ class ReadProcessBoxes:
         self.filepath_categories_map = filepath_categories_map
         self.input_format = input_format
 
-        if self.input_format not in self.accepted_pickle_formats:
-            raise ValueError(f"input format not in the acceptable formats {self.acceptable_pickle_formats}")
+        if self.input_format not in self.accepted_formats:
+            raise ValueError(f"input format not in the acceptable formats {self.acceptable_formats}")
             
         
         self.box_type = box_type
@@ -123,26 +123,44 @@ class ReadProcessBoxes:
         Load the dataframe from pickle file and return it as an RDD
         """
         
+        if return_as not in ["rdd", "list"]:
+            raise ValueError(f"return_as must be one of ['rdd', 'list'] but got {return_as}")
+        
+        if spark is None:
+                raise ValueError("spark must be provided if return_as='rdd'")
+        
         if self.input_format in ["pkl", "pickle"]:
             try:
                 matching_files = self._list_and_match_files(filepath, file_pattern="*.pkl")
             except FileNotFoundError:
                 matching_files = self._list_and_match_files(filepath, file_pattern="*.pickle")
+            
+            data = {}
+            for file in matching_files:
+                data.update(self._read_pickle(file))
         
-        data = {}
-        for file in matching_files:
-            data.update(self._read_pickle(file))
-        
-        valid_data = {key: value for key, value in data.items() if value is not None and key != "last_idx"}        
+            valid_data = {key: value for key, value in data.items() if value is not None and key != "last_idx"}
+            
+            if return_as in ["list"]:  
+                return list(valid_data.items())
+            elif return_as in ["rdd"]:
 
-        if return_as in ["list"]:  
-            return list(valid_data.items())
-        elif return_as in ["rdd"]:
-            if spark is None:
-                raise ValueError("spark must be provided if return_as='rdd'")
-            return spark.sparkContext.parallelize(valid_data.items(), self.num_partitions)
-        else:
-             raise NotImplementedError(f"return_as={return_as} is not implemented")
+                return spark.sparkContext.parallelize(valid_data.items(), self.num_partitions)      
+        
+        if self.input_format in ["parquet"]:
+            
+            # check if /dbfs/ is in the path if so, we have to remove it to use in the spark.read.parquet
+            if filepath.startswith("/dbfs"):
+                filepath = filepath.replace("/dbfs", "")
+            
+            # read the parquet files from the path
+            valid_data = spark.read.parquet(filepath)
+
+            if return_as in ["list"]:
+                raise ValueError("return_as='list' is not supported for parquet files")
+            
+            elif return_as in ["rdd"]:
+                return valid_data.rdd.repartition(self.num_partitions)
     
     
     def _transform_box_to_row(self, box, box_type, category_id):
@@ -173,15 +191,25 @@ class ReadProcessBoxes:
 
     def _preprocess_metadata_rdd(self, row, box_type, is_relative, categories_map=None, is_combined=False):
     
-        asset_id, metadata = row
-        image_size = metadata['image_size']
-        boxes = metadata['boxes']
+        if self.input_format in ["pkl", "pickle"]:
+            asset_id, metadata = row
+            image_size = metadata['image_size']
+            boxes = metadata['boxes']
+            if is_combined:
+                uri = metadata["uri"]
 
-        if isinstance(image_size, str):
-            # there is an issue we have to fix, this if statement is a temporary fix
-            image_size = boxes['image_size']
-            boxes = boxes['boxes']
-
+            if isinstance(image_size, str):
+                # there is an issue we have to fix, this if statement is a temporary fix
+                image_size = boxes['image_size']
+                boxes = boxes['boxes']
+            
+        else:
+            asset_id = row.asset_id
+            image_size = row.image_size
+            boxes = row.boxes
+            if is_combined:
+                uri = row.uri
+            
         width, height = image_size
 
         # Restructure "boxes" list of dictionaries
@@ -213,7 +241,7 @@ class ReadProcessBoxes:
                 box_type=box_type 
             )
         else:
-            uri = metadata["uri"]
+            
             return Row(
                 asset_id=asset_id,
                 width=width,
@@ -327,25 +355,45 @@ if __name__ == "__main__":
     os.environ["AWS_PROFILE"]="saml"
     os.environ["AWS_DEFAULT_REGION"]="eu-west-1"
     
-    print("Reading train dataset...")
-    reader_train = ReadProcessBoxes(
-        filepath_metadata="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/train_dataset/metadata.pkl",
-        filepath_images="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/train_dataset/asset_paths.pkl",
-        filepath_categories_map="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/map/config.yaml",   
-        save_path="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/",        
-    )
+    # print("Reading train dataset...")
+    # reader_train = ReadProcessBoxes(
+    #     filepath_metadata="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/train_dataset/metadata.pkl",
+    #     filepath_images="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/train_dataset/asset_paths.pkl",
+    #     filepath_categories_map="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/map/config.yaml",   
+    #     save_path="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/",        
+    # )
     
     # reader_train.read()
     
-    print("Reading test dataset...")
-    reader_test = ReadProcessBoxes(
-        filepath_combined="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/test_dataset/",
-        filepath_categories_map="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/map/config.yaml",
-        save_path="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/merged/test_dataset/",
-        output_format=["pickle"]
-    )
+    # reader_train_part_2 = ReadProcessBoxes(
+    #     filepath_combined="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/train_dataset/extra/output/",
+    #     filepath_categories_map="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/map/config.yaml",
+    #     input_format="parquet",
+    #     save_path="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/extra/",
+    # )
+    # reader_train_part_2.read()
+    
+    # stack the two parts of the train dataset and save it
+    print("Stacking the two parts of the train dataset...")
+    train_df_1 = spark.read.parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/metadata/")
+    train_df_2 = spark.read.parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/extra/metadata/")
+    
+    # stack the two dataframes and remove duplicates based on asset_id
+    train_df = train_df_1.union(train_df_2).dropDuplicates(["asset_id"])
+    
+    # save the stacked dataframe
+    train_df.write.mode("overwrite").parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/complete/")
+    
+        
+    # print("Reading test dataset...")
+    # reader_test = ReadProcessBoxes(
+    #     filepath_combined="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/test_dataset/",
+    #     filepath_categories_map="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/map/config.yaml",
+    #     save_path="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/merged/test_dataset/",
+    #     output_format=["pickle"]
+    # )
 
-    reader_test.read()
+    # reader_test.read()
         
            
             
