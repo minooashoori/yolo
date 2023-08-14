@@ -101,3 +101,19 @@ def intersection_area_yolo(box1, box2):
     area = width * height
 
     return area
+
+
+def union_area_yolo(box1, box2):
+    area1 = box1[2] * box1[3]
+    area2 = box2[2] * box2[3]
+    return area1 + area2 - intersection_area_yolo(box1, box2)
+
+def iou_yolo(box1, box2):
+    return intersection_area_yolo(box1, box2) / union_area_yolo(box1, box2)
+
+
+# test intersection_area_yolo, union_area_yolo, iou_yolo
+box1 = [0.75, 0.75, 0.5, 0.5]
+box2 = [0.5, 0.5, 0.5, 0.5]
+iou = iou_yolo(box1, box2)
+print(iou)
