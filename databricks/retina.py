@@ -146,12 +146,12 @@ if __name__ == "__main__":
     
     retina_df = retina_df_1.union(retina_df_2).dropDuplicates(["asset_id"])
     
-    print(f"The number of assets in retina is {retina_df.count()}")
+    # print(f"The number of assets in retina is {retina_df.count()}")
     
     
     ias_df = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/internal_face_detector/annotations/", spark, "ias")
     
-    print(f"The number of assets in internal face detector is {ias_df.count()}")
+    # print(f"The number of assets in internal face detector is {ias_df.count()}")
     
     # merge the retina_df with the ias_df
     faces_df = ias_df.join(retina_df, on="asset_id", how="inner")
@@ -160,11 +160,13 @@ if __name__ == "__main__":
     datanet_df = datanet_df.dropDuplicates(["asset_id"])
     datanet_df = datanet_df.repartition(1000)
     
-    print("Number of assets in datanet: {}".format(datanet_df.count()))
+    # print("Number of assets in datanet: {}".format(datanet_df.count()))
 
     # merge the dataframe with the previous dataframe containing the image size
     df = faces_df.join(datanet_df, on="asset_id", how="inner")
 
+    #cache the dataframe
+    df = df.cache()
     
     # create a udf to apply the function to the dataframe
     transform_boxes_udf = udf(transform_boxes, output_schema)
@@ -176,14 +178,25 @@ if __name__ == "__main__":
     # udf to merge the boxes
     merge_boxes_udf = udf(merge_boxes, output_schema)
     
-    # merge the boxes
+    # merge the face boxes
     df =  df.withColumn("face_boxes", merge_boxes_udf("retina_boxes", "ias_boxes"))
+    
+    # add a variable to indicate if the asset has a face box
+    df = df.withColumn("has_face", F.when(F.size(F.col("face_boxes")) > 0, 1).otherwise(0))
+    # same for number of boxes
+    df = df.withColumn("n_face_boxes", F.size(F.col("face_boxes")))
+    
+    # similarly add a variable to indicate if the asset has a logo box
+    df = df.withColumn("has_logo", F.when(F.size(F.col("boxes")) > 0, 1).otherwise(0))
+    
+    # add a variable to indicate the number of logo boxes
+    df = df.withColumn("n_logo_boxes", F.size(F.col("boxes")))
     
     
     # add the face boxes to the boxes column and remove the face_boxes column
     df = df.withColumn("boxes", F.concat(F.col("boxes"), F.col("face_boxes"))).drop("face_boxes")
     
-    df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type")
+    df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type", "has_face", "n_face_boxes", "has_logo", "n_logo_boxes")
     
     print("Number of assets after merging the boxes: {}".format(df.count()))
 
@@ -207,11 +220,18 @@ if __name__ == "__main__":
     # stack the two dataframes again
     df = df_boxes.union(df_no_boxes)
     print("Final number of assets: {}".format(df.count()))
+  
 
     #save the dataframe to parquet
     df.write.mode("overwrite").parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/metadata_with_faces/")
 
-
+    # show the statistics by has_face and has_logo
+    df.groupBy("has_face", "has_logo").count().show(truncate=False)
+    
+    # show the statistics by n_face_boxes, n_logo_boxes
+    df.groupBy("n_face_boxes").count().show(truncate=False)
+    df.groupBy("n_logo_boxes").count().show(truncate=False)
+    
 
     # # select a sample of 100 assets in which both algorithms detected faces
     # sample_size = 200/df.count()

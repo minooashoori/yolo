@@ -268,6 +268,10 @@ class YoloWriter:
                 # for each split, write the images and annotations
                 # df.foreach(lambda row: self._write_row(row, split))
                 df.foreachPartition(lambda rows: self._process_partition(rows, split))
+                
+                # save the dataframe with the asset_ids and the split
+                df.select("asset_id").write.mode("overwrite").parquet(os.path.join(self.output_folder.replace("/dbfs", ""), 
+                                                                                   f"{split}_asset_ids.parquet"))
             print("done")    
             # # write the dataset.yaml file
             self._write_dataset_yaml()
@@ -286,8 +290,9 @@ if __name__ == "__main__":
 
     yolo_writer = YoloWriter(
         metadata_filepath="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/metadata_with_faces/",
-        output_folder="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/yolo_dataset_100k",
+        output_folder="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/yolo_dataset_200k",
         override_category_map={134533: {"description": "face", "id": 0}, 90020: {"description": "logo", "id": 1}},
         split=True,
+        sample_fraction=0.2
     )
     yolo_writer.write()
