@@ -7,6 +7,7 @@ from preprocess.paths import fix_dbfs_s3_path_for_spark
 import shutil
 import math
 import yaml
+import tarfile
 
 class YoloWriter:
     
@@ -14,6 +15,7 @@ class YoloWriter:
                  metadata_filepath: str,
                  output_folder: str,
                  split: bool,
+                 tar_folder: str = "/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/yolo",
                  category_map_filepath: str = None,
                  override_category_map: dict = None,
                  splits: Union[List[str], str] = ["train", "val"],
@@ -27,6 +29,7 @@ class YoloWriter:
         # path block
         self.metadata_filepath = metadata_filepath
         self.output_folder = output_folder
+        self.dataset_name = self.output_folder.split('/')[-1]
         self.output_path_images = os.path.join(output_folder, "images")
         self.output_path_labels = os.path.join(output_folder, "labels")
         self.category_map_filepath = category_map_filepath
@@ -35,6 +38,8 @@ class YoloWriter:
         else:
             self.category_map = self._load_categories_map()
         self.n_classes = len(self.category_map)
+        
+        self.tar_folder = tar_folder
         
         # split block
         self.split = split
@@ -50,6 +55,7 @@ class YoloWriter:
         self.seed = seed
         self.n_processes = n_processes
         self.images_only = images_only
+        
     
     
     def _check_splits(self):
@@ -163,8 +169,9 @@ class YoloWriter:
     
     def _write_annotations(self, boxes, image_filename: str, split: str):
         
-        # remove the extension
-        image_name = image_filename.split('.')[0]
+        # remove only the last extension e.g img.jpg.jpg -> img.jpg.txt
+        image_name = os.path.splitext(image_filename)[0]
+        
         # if we have boxes
         if len(boxes) != 0:
         
@@ -217,7 +224,14 @@ class YoloWriter:
         # we are done, write the file
         with open(os.path.join(self.output_folder, "dataset.yaml"), "w") as f:
             f.write(data_yaml)
+    
+    def _create_tar_archive(self):
+        # Create a tar archive of the entire output folder
+        tar_filename = os.path.join(self.tar_folder, self.dataset_name, "data.tar")
+        with tarfile.open(tar_filename, "w") as tar:
+            tar.add(self.output_folder, arcname="yolo")
             
+
 
         
     def write(self):
@@ -261,6 +275,8 @@ class YoloWriter:
             else:
                 dfs = [df]
                 
+            
+                
             for split, df in zip(self.splits, dfs):
                 # create the folders if they don't exist
                 os.makedirs(os.path.join(self.output_path_images, split), exist_ok=True)
@@ -270,16 +286,18 @@ class YoloWriter:
                 df.foreachPartition(lambda rows: self._process_partition(rows, split))
                 
                 # save the dataframe with the asset_ids and the split
-                df.select("asset_id").write.mode("overwrite").parquet(os.path.join(self.output_folder.replace("/dbfs", ""), 
-                                                                                   f"{split}_asset_ids.parquet"))
-            print("done")    
+                df.select("asset_id").write.mode("overwrite").parquet(os.path.join(self.tar_folder.replace("/dbfs", ""), self.dataset_name, f"{split}_asset_ids.parquet"))   
             # # write the dataset.yaml file
             self._write_dataset_yaml()
+            
+            print("Creating tar archive...")
+            self._create_tar_archive()
+            
             
             # # stop spark
             # spark.stop()
             
-            # print("Done!")
+            print("Done!")
         
 if __name__ == "__main__":
     import sys
@@ -290,7 +308,7 @@ if __name__ == "__main__":
 
     yolo_writer = YoloWriter(
         metadata_filepath="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/metadata_with_faces/",
-        output_folder="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/yolo_dataset_200k",
+        output_folder="/dbfs/mnt/innovation/pdacosta/data/total_fusion_02/yolo_200k",
         override_category_map={134533: {"description": "face", "id": 0}, 90020: {"description": "logo", "id": 1}},
         split=True,
         sample_fraction=0.2
