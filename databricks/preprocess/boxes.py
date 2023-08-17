@@ -19,7 +19,7 @@ def fix_bounds_xyxy_box(box, image_size, is_relative):
         if y1 < 0: # y1
             y1 = 0.0
         if x2 > 1.0: # x2
-            x1 = 1.0
+            x2 = 1.0
         if y2 > 1.0: # y2
             y2 = 1.0
     else:
