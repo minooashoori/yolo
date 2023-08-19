@@ -162,3 +162,5 @@ cython_debug/
 .databricks
 .vscode/
 wandb/
+.DS_Store
+```
