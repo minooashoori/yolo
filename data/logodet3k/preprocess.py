@@ -7,8 +7,6 @@ from databricks.preprocess.boxes import transf_any_box, relative, fix_bounds_rel
 import shutil
 
 
-
-
 def process_xml(file):
     
     """
