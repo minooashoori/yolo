@@ -176,12 +176,13 @@ def transf_any_box(box, input_type="xyxy", output_type="yolo"):
 
 
 def relative(width, height, box):
-    return box[0]/width, box[1]/height, box[2]/width, box[3]/height
+    box = box[0]/width, box[1]/height, box[2]/width, box[3]/height
+    box = [round(coord, 4) for coord in box]
+    return box
 
 def ensure_bounds(coord, min_coord, max_coord):
     coord = max(coord, min_coord)
     coord = min(coord, max_coord)
-    # round the coord to 4 decimal places
     coord = round(coord, 4)
     return coord
 

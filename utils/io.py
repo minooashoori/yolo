@@ -51,45 +51,46 @@ def unzip_file_s3(path, target_dir):
     return zip_list
 
 
-def download(s3_path, local_path):
+def download(s3_path, local_filepath):
     """
-    download a file from s3 to local disk
+    Download a file from S3 to a local directory.
     """
     s3 = boto3.client('s3')
     
     bucket, key = get_s3_bucket_key(s3_path)
     
-    # check if the file already exists
-    if os.path.exists(local_path):
-        print(f"File {local_path} already exists.")
-        return 
+    # if we mistaknely pass a directory as the local path
+    # we need to add the filename to the local path
+    if os.path.isdir(local_filepath):
+        local_filepath = os.path.join(local_filepath, os.path.basename(key))
     
-    # check if the dir exists if not create it
-    local_dir = os.path.dirname(local_path)
-    if not os.path.exists(local_dir):
-        os.makedirs(local_dir)
+    # Create the local directory if it doesn't exist
+    local_dir = os.path.dirname(local_filepath)
+    os.makedirs(local_dir, exist_ok=True)
     
-    print(f"Downloading from {bucket}/{key}...")
-    s3.download_file(bucket, key, local_path)
-    print(f"Downloaded to {local_path}")
+    # if the file already exists skip
+    if os.path.exists(local_filepath):
+        print(f"File {local_filepath} already exists. Skipping.")
+        return
+    
+    print(f"Downloading from {bucket}/{key}... to {local_filepath}")
+    s3.download_file(bucket, key, local_filepath)
+    print(f"Downloaded to {local_filepath}")
     
 
 
 
-def unzip_file(path, target_dir, overwrite=False):
+def unzip_file(path, target_dir=None, delete_zip=False):
     """
     Unzip a file from local disk to a target directory.
     """
     
+    if target_dir is None:
+        target_dir = os.path.dirname(path)
+    
     # check if the file already exists
     if os.path.exists(target_dir):
-        if overwrite:
-            print(f"Directory {target_dir} already exists. Overwriting.")
-            # delete the directory
-            shutil.rmtree(target_dir)
-        else:
-            print(f"Directory {target_dir} already exists. Skipping.")
-            return
+        print(f"Directory to extract the files {target_dir} already exists. This might overwrite existing files.")
     
     os.makedirs(target_dir, exist_ok=True)
     
@@ -98,6 +99,9 @@ def unzip_file(path, target_dir, overwrite=False):
         zip_ref.extractall(target_dir)
     
     print(f"Unzipped {path} to {target_dir}")
+    if delete_zip:
+        os.remove(path)
+        print(f"Deleted {path}")
     
     
 def list_files(dir, ext):
@@ -107,45 +111,55 @@ def list_files(dir, ext):
     return glob(os.path.join(dir, "**" ,f"*.{ext}"), recursive=True)
 
 
-def mv_to_dir(input_dir, target_dir, ext, rename: bool):
+def mv_to_dir(input_dir: str, target_dir: str, ext: str, rename: bool, keep_dir_structure: bool = False, prefix: str = None):
     """
     Move all files with a given extension to a folder.
     """
     files = list_files(input_dir, ext)
+    num_files = len(files)
     
-    print(f"Moving {len(files)} files to {target_dir}...")
-    # create the target dir
+    print(f"Moving {num_files} files to {target_dir}...")
+    
+    # Create the target directory
     os.makedirs(target_dir, exist_ok=True)
     
-    # we have to rename the files to avoid name collisions
-    num_digits = len(str(len(files)))
-    # we will create files with the format 000000.ext where the number of zeros is the number of files
-    i = 0
+    # Determine the number of digits needed for renaming
+    num_digits = len(str(num_files))
+    
     old_new_names_map = {}
-    for file_ in files:
-        # get the new name
-        new_name = f"logodet3k_{str(i).zfill(num_digits)}.{ext}"
-        # move the file
+    
+    # raise warning if we have prefix with rename=False
+    if not rename and prefix:
+        print("Warning: rename=False and prefix is not None. Prefix will be ignored.")
+    
+    for i, file_ in enumerate(files):
+        # Determine the new name for the file
         if rename:
-            new_filepath = os.path.join(target_dir, new_name)
-            shutil.move(file_, new_filepath)
+            new_name = f"{prefix}_{str(i).zfill(num_digits)}.{ext}" if prefix else f"{str(i).zfill(num_digits)}.{ext}"
         else:
-            # if we don't rename we need to keep the folder structure
-            # so we need to remove the input_dir from the file path
-            # and add it to the target_dir
+            new_name = os.path.basename(file_)
+        
+        
+        # if we want to keep the directory structure then we need to remove the input_dir from the path
+        if keep_dir_structure:
             path_to_file = file_.replace(input_dir, "")
+            if rename:
+                # change the name of the file in path_to_file
+                path_to_file = path_to_file.replace(os.path.basename(file_), new_name)
+                
             new_filepath = os.path.join(target_dir, path_to_file.lstrip(os.path.sep))
-            # new_filepath = target_dir + file_.replace(input_dir, "")
-            print("new_filepath", new_filepath)
-            # if the dir doesn't exist create it
-            os.makedirs(os.path.dirname(new_filepath), exist_ok=True)
+        else:
+            new_filepath = os.path.join(target_dir, new_name)
+        
             
-            shutil.move(file_, new_filepath)
+        # Create the necessary directories
+        os.makedirs(os.path.dirname(new_filepath), exist_ok=True)
+        
+        # Move the file
+        shutil.move(file_, new_filepath)
         old_new_names_map[file_] = new_filepath
-        i += 1
     
-    print(f"Moved {len(files)} files to {target_dir}")
-    
+    print(f"Moved {num_files} files to {target_dir}")
     return old_new_names_map
     
 
@@ -165,8 +179,6 @@ def compress_dir(input_dir):
     print(f"Compressed {input_dir} to {zip_path}")
     
     return zip_path + ".zip"
-
-
 
 
 
