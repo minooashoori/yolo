@@ -1,6 +1,6 @@
 import sys
 import os
-from preprocess.boxes import transf_any_box, fix_bounds_relative
+from utils.boxes import transf_any_box, fix_bounds_relative
 from pyspark import SparkContext
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import udf, lit, size, array_union

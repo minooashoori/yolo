@@ -17,6 +17,13 @@ model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train29/weights/best.pt')
 
 
 # # train the model with an s3 dataset
-results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/yolov8/yolo200k.yaml", epochs=50, batch=128, imgsz = 320, mosaic=False, visualize=True)
+results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/yolov8/yolo200k.yaml",
+                      epochs=50,
+                      batch=128,
+                      imgsz=320,
+                      mosaic=False, 
+                      visualize=True)
 
 # results = model.train(data=data, epochs=100, imgsz=640)ls
+
+#

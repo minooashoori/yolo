@@ -1,3 +1,4 @@
+import ast
 
 def transform_xyxy_to_xywh(box):
     x1, y1, x2, y2 = box
@@ -67,19 +68,19 @@ def fix_bounds_xyxy_box(box, image_size, is_relative):
             x2 = image_size[0]
         if y2 > image_size[1]:
             y2 = image_size[1]
-    
+
     return x1, y1, x2, y2
-        
+
 
 def transform_box(box, image_size, box_type, is_relative):
-    
+
     assert box_type in ["yolo", "xywh", "xyxy"], "box_type must be one of: 'yolo', 'xywh' or 'xyxy'"
-    
-    
+
+
     w, h = image_size
     x1, y1, x2, y2 = box
-    
-    if is_relative:  
+
+    if is_relative:
         if not is_percentage(box):
             # we will convert the absolute coordinates to relative coordinates
             x1 = x1/w
@@ -93,15 +94,15 @@ def transform_box(box, image_size, box_type, is_relative):
             x2 = int(x2*w)
             y1 = int(y1*h)
             y2 = int(y2*h)
-    
+
     box = fix_bounds_xyxy_box(box=[x1, y1, x2, y2], image_size=image_size, is_relative=is_relative)
-    
+
     if box_type == 'yolo':
         box = transform_xyxy_to_yolo(box)
     elif box_type == 'xywh':
         box = transform_xyxy_to_xywh(box)
-            
-    return box 
+
+    return box
 
 
 
@@ -141,43 +142,45 @@ def iou_yolo(box1, box2):
 
 
 def transf_any_box(box, input_type="xyxy", output_type="yolo"):
-    
+
     if input_type == output_type:
         return box
-    
+
     # xyxy -> ...
     if input_type == "xyxy" and output_type == "yolo":
         x_center, y_center, w, h = transform_xyxy_to_yolo(box)
         return x_center, y_center, w, h
-    
+
     if input_type == "xyxy" and output_type == "xywh":
         x1, y1, w, h = transform_xyxy_to_xywh(box)
         return x1, y1, w, h
-    
+
     # xywh -> ...
     if input_type == "xywh" and output_type == "xyxy":
         x1, y1, x2, y2 = transform_xywh_to_xyxy(box)
         return x1, y1, x2, y2
-    
+
     if input_type == "xywh" and output_type == "yolo":
         x_center, y_center, w, h = transform_xywh_to_yolo(box)
         return x_center, y_center, w, h
-    
+
     # yolo -> ...
     if input_type == "yolo" and output_type == "xyxy":
         x1, y1, x2, y2 = transform_yolo_to_xyxy(box)
         return x1, y1, x2, y2
-    
+
     if input_type == "yolo" and output_type == "xywh":
         x1, y1, w, h = transform_yolo_to_xywh(box)
         return x1, y1, w, h
-    
+
     raise ValueError(f"input_type: {input_type} and output_type: {output_type} are not supported")
 
 
 def relative(width, height, box):
-    box = box[0]/width, box[1]/height, box[2]/width, box[3]/height
-    box = [round(coord, 4) for coord in box]
+    if not is_percentage(box):
+        box = box[0]/width, box[1]/height, box[2]/width, box[3]/height
+        box = [round(coord, 4) for coord in box]
+        return box
     return box
 
 def ensure_bounds(coord, min_coord, max_coord):
@@ -190,7 +193,7 @@ def ensure_order(box, box_type="xyxy"):
     if box_type != "xyxy":
         raise ValueError(f"box_type: {box_type} is not supported")
     x1, y1, x2, y2 = box
-    
+
     if x1 >= x2:
         # swap x1 and x2
         x1, x2 = x2, x1
@@ -198,24 +201,19 @@ def ensure_order(box, box_type="xyxy"):
         # swap y1 and y2
         y1, y2 = y2, y1
     return x1, y1, x2, y2
-    
-    
+
+
 def fix_bounds_relative(box, box_type):
-    
+
     new_box = []
     for coord in box:
         new_box.append(ensure_bounds(coord, 0.0, 1.0))
-    
+
     if box_type == "xyxy":
         new_box = ensure_order(new_box, box_type)
-        
-    return new_box
-    
-    
 
-    
-    
-    
+    return new_box
+
 
 if __name__ == "__main__":
     # test intersection_area_yolo, union_area_yolo, iou_yolo
