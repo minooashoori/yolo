@@ -1,19 +1,35 @@
-from utils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative
+from utils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative, yolo_annotations
+from utils.paths import create_uris
 from pyspark.sql.functions import udf
 import pyspark.sql.functions as F
-from pyspark.sql.types import LongType, ArrayType, StructType, StructField, DoubleType
+from pyspark.sql.types import LongType, ArrayType, StructType, StructField, DoubleType, StringType
 import PIL.Image as Image
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
+import ast
+from utils.paths import  innovation_path
+import os
 
-output_schema_dict = ArrayType(StructType([
+TOTAL_FUSION_02_PATH = os.path.join(innovation_path("mnt"), "pdacosta", "data", "total_fusion_02")
+INPUT_PATH_RETINA = os.path.join(TOTAL_FUSION_02_PATH, "retina", "annotations")
+INPUT_PATH_RETINA_EXTRA = os.path.join(TOTAL_FUSION_02_PATH, "retina", "extra", "annotations")
+INPUT_PATH_INTERNAL_FACE_DETECTOR =  os.path.join(TOTAL_FUSION_02_PATH, "internal_face_detector", "annotations")
+INPUT_PATH_DATANET = os.path.join(TOTAL_FUSION_02_PATH, "merged", "train_dataset", "complete")
+
+OUTPUT_PATH = os.path.join(TOTAL_FUSION_02_PATH, "annotations")
+OUTPUT_PARQUET_PATH =  os.path.join(OUTPUT_PATH, "parquet")
+OUTPUT_CSV_PATH = os.path.join(OUTPUT_PATH, "csv")
+
+
+OUTPUT_SCHEMA_BOX = ArrayType(StructType([
     StructField("category", LongType(), True),
     StructField("x", DoubleType(), True),
     StructField("y", DoubleType(), True),
     StructField("width", DoubleType(), True),
     StructField("height", DoubleType(), True)
 ]))
+
 
 
 def boxes_to_dict(boxes, width, height, input_type, output_type, class_id=0):
@@ -37,8 +53,6 @@ def boxes_to_dict(boxes, width, height, input_type, output_type, class_id=0):
 
         transformed_boxes.append(box_dict)
     return transformed_boxes
-
-
 
 
 def merge_boxes(retina_boxes, ias_boxes, iou_threshold=0.25):
@@ -133,45 +147,7 @@ def plot_boxes(uri, retina_boxes, ias_boxes, face_boxes, width, height, retina_c
 
     plt.show()
 
-
-
-if __name__ == "__main__":
-
-    # read parquet files from a directory in pyspark
-    retina_df_1 = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/retina/annotations/", spark, "retina")
-    retina_df_2 = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/retina/extra/annotations/", spark, "retina")
-    retina_df = retina_df_1.union(retina_df_2).dropDuplicates(["asset_id"])
-
-
-    # read ias boxes - ie those from the internal face detector
-    ias_df = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/internal_face_detector/annotations/", spark, "ias")
-
-    # merge the retina_df with the ias_df anc create faces_df
-    faces_df = ias_df.join(retina_df, on="asset_id", how="inner")
-
-    # read the datanet dataframe - this only contains logo boxes
-    datanet_df = spark.read.parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/complete/")
-    datanet_df = datanet_df.dropDuplicates(["asset_id"])
-
-    # merge the faces_df with the datanet_df and  cache
-    df = faces_df.join(datanet_df, on="asset_id", how="inner")
-    df = df.cache()
-
-    # create a udf to transform the boxes
-    transform_boxes_udf = udf(boxes_to_dict, output_schema_dict)
-
-    # apply the udf to the dataframe and create the  face boxes following the yolo format
-    df = df.withColumn("ias_boxes", transform_boxes_udf("ias_boxes", "width", "height", F.lit("xyxy"), F.lit("yolo"), F.lit(0)))
-    df = df.withColumn("retina_boxes", transform_boxes_udf("retina_boxes", "width", "height", F.lit("xyxy"), F.lit("yolo"), F.lit(0)))
-
-    # udf to merge the boxes
-    merge_boxes_udf = udf(merge_boxes, output_schema_dict)
-
-    # merge the face together based on the iou threshold
-    df =  df.withColumn("face_boxes", merge_boxes_udf("retina_boxes", "ias_boxes"))
-
-
-
+def undersample_faces(df, seed=42):
     # add a variable to indicate if the asset has a face box
     df = df.withColumn("has_face", F.when(F.size(F.col("face_boxes")) > 0, 1).otherwise(0))
     # same for number of boxes
@@ -190,11 +166,12 @@ if __name__ == "__main__":
     n_assets_with_logo = df.filter((F.col("has_face") == 0) & (F.col("has_logo") == 1)).count()
 
     # we will undersample the assets with faces to match the assets with logos
-    print("Undersample the assets with faces to match the assets with logos")
+    print("Undersampling the assets with faces to match the assets with logos...")
+
     fraction_face_logo = n_assets_with_logo/n_assets_with_face
     fraction_face_logo = min(fraction_face_logo, 1.0)
 
-    df_face = df.filter((F.col("has_face") == 1) & (F.col("has_logo")== 0)).sample(False, fraction_face_logo, seed=42)
+    df_face = df.filter((F.col("has_face") == 1) & (F.col("has_logo")== 0)).sample(False, fraction_face_logo, seed=seed)
 
     # remove the assets with faces and no logos from df, ie keep only the assets with logos, or with both or neither
     df_neither = df.filter((F.col("has_face") == 0) & (F.col("has_logo")== 0))
@@ -205,12 +182,9 @@ if __name__ == "__main__":
 
     print(f"Number of assets after undersampling faces: {df.count()}")
 
-    # add the face boxes to the boxes column and remove the face_boxes column
-    df = df.withColumn("boxes", F.concat(F.col("boxes"), F.col("face_boxes"))).drop("face_boxes")
+    return df
 
-    df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type", "has_face", "n_face_boxes", "has_logo", "n_logo_boxes")
-
-    print("Number of assets after merging the boxes: {}".format(df.count()))
+def undersample_backgrounds(df, prop=0.02):
 
     # split the rows that don't have a box
     df_no_boxes = df.filter(F.size(F.col("boxes")) == 0)
@@ -218,14 +192,13 @@ if __name__ == "__main__":
     # split the rows that have a box
     df_boxes = df.filter(F.size(F.col("boxes")) > 0)
 
-    print("Number of assets with boxes: {}".format(df_boxes.count()))
-    print("Number of assets without boxes: {}".format(df_no_boxes.count()))
-
+    print(f"Number of assets with boxes: {df_boxes.count()}")
+    print(f"Number of assets without boxes: {df_no_boxes.count()}")
     # sample the assets without boxes to be max 2%*n_assets_with_boxes
-    fraction = (0.02*df_boxes.count())/df_no_boxes.count()
+    fraction = (prop*df_boxes.count())/df_no_boxes.count()
     fraction = min(fraction, 1.0)
 
-    print(f"Keep {fraction*100}% of the assets without boxes")
+    print(f"Keep {fraction*100:.2f}% of the assets without boxes")
 
     df_no_boxes = df_no_boxes.sample(False, fraction, seed=42)
 
@@ -233,16 +206,116 @@ if __name__ == "__main__":
     df = df_boxes.union(df_no_boxes)
     print("Final number of assets: {}".format(df.count()))
 
+    return df
+
+def split_df(df, fraction=0.8):
+    # split the dataframe into train and test
+    split_df = df.sample(False, fraction, seed=42)
+    remain_df = df.subtract(split_df)
+
+    return split_df, remain_df
+
+def split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1):
+    # split the dataframe into train and test
+    train_df, remain_df = split_df(df, train_fraction)
+
+    # split the remaining dataframe into val and test
+    val_df, test_df = split_df(remain_df, val_fraction/(val_fraction + test_fraction))
+
+    return train_df, val_df, test_df
+
+if __name__ == "__main__":
+    from pyspark.sql import SparkSession
+    spark = SparkSession.builder.getOrCreate()
+
+    # read parquet files from a directory in pyspark
+    # retina_df_1 = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/retina/annotations/", spark, "retina")
+    # retina_df_2 = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/retina/extra/annotations/", spark, "retina")
+    # retina_df = retina_df_1.union(retina_df_2).dropDuplicates(["asset_id"])
+
+    retina_df_1 =  read_boxes_parquet(INPUT_PATH_RETINA, spark, "retina")
+    retina_df_2 =  read_boxes_parquet(INPUT_PATH_RETINA_EXTRA, spark, "retina")
+    retina_df = retina_df_1.union(retina_df_2).dropDuplicates(["asset_id"])
+
+
+    # read ias boxes - ie those from the internal face detector
+    # ias_df = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/internal_face_detector/annotations/", spark, "ias")
+    ias_df = read_boxes_parquet(INPUT_PATH_INTERNAL_FACE_DETECTOR, spark, "ias")
+
+    # merge the retina_df with the ias_df anc create faces_df
+    faces_df = ias_df.join(retina_df, on="asset_id", how="inner")
+
+    # read the datanet dataframe - this only contains logo boxes
+    # datanet_df = spark.read.parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/complete/")
+    datanet_df = spark.read.parquet(INPUT_PATH_DATANET)
+    datanet_df = datanet_df.dropDuplicates(["asset_id"])
+
+    # merge the faces_df with the datanet_df and  cache
+    df = faces_df.join(datanet_df, on="asset_id", how="inner")
+    df = df.cache()
+
+    #unpersist the dataframes
+    faces_df.unpersist()
+    datanet_df.unpersist()
+    retina_df.unpersist()
+    ias_df.unpersist()
+
+    # create a udf to transform the boxes
+    transform_boxes_udf = udf(boxes_to_dict, OUTPUT_SCHEMA_BOX)
+
+    # apply the udf to the dataframe and create the  face boxes following the yolo format
+    df = df.withColumn("ias_boxes", transform_boxes_udf("ias_boxes", "width", "height", F.lit("xyxy"), F.lit("yolo"), F.lit(0)))
+    df = df.withColumn("retina_boxes", transform_boxes_udf("retina_boxes", "width", "height", F.lit("xyxy"), F.lit("yolo"), F.lit(0)))
+
+    # udf to merge the boxes
+    merge_boxes_udf = udf(merge_boxes, OUTPUT_SCHEMA_BOX)
+
+    # merge the faces together based on the iou threshold
+    df =  df.withColumn("face_boxes", merge_boxes_udf("retina_boxes", "ias_boxes"))
+
+    # undersample the faces
+    df = undersample_faces(df)
+
+    # merge the face boxes with the logo boxes
+    df = df.withColumn("boxes", F.concat(F.col("boxes"), F.col("face_boxes"))).drop("face_boxes")
+
+    # undersample the backgrounds
+    df = undersample_backgrounds(df, prop=0.02)
+
+    # make yolo annotations
+    yolo_annotations_udf = udf(yolo_annotations, StringType())
+    df = df.withColumn("yolo_annotations", yolo_annotations_udf("boxes"))
+
+    df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type", "has_face", "n_face_boxes", "has_logo", "n_logo_boxes", "yolo_annotations")
+    # create more uri columns
+    df = create_uris(df)
+
+    print(f"Number of assets after merging the boxes: {df.count()}")
+
+
+    # split the dataframe into train, val and test
+    train_df, val_df, test_df = split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1)
+
+    # save the dataframes with the annotations
+    train_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/train/")
+    val_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/val/")
+    test_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/test/")
+
+    # csvs
+    train_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/train/", header=True)
+    val_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/val/", header=True)
+    test_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/test/", header=True)
+
 
     #save the dataframe to parquet
-    df.write.mode("overwrite").parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/undersampled/")
+    # df.write.mode("overwrite").parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/undersampled/")
 
-    # show the statistics by has_face and has_logo
-    df.groupBy("has_face", "has_logo").count().show(truncate=False)
+    # # show the statistics by has_face and has_logo
+    # df.groupBy("has_face", "has_logo").count().show(truncate=False)
 
-    # show the statistics by n_face_boxes, n_logo_boxes
-    df.groupBy("n_face_boxes").count().show(truncate=False)
-    df.groupBy("n_logo_boxes").count().show(truncate=False)
+    # # show the statistics by n_face_boxes, n_logo_boxes
+    # df.groupBy("n_face_boxes").count().show(truncate=False)
+    # df.groupBy("n_logo_boxes").count().show(truncate=False)
 
 
     # # select a sample of 100 assets in which both algorithms detected faces

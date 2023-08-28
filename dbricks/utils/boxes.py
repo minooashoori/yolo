@@ -214,6 +214,28 @@ def fix_bounds_relative(box, box_type):
 
     return new_box
 
+def yolo_annotations(boxes):
+    if len(boxes) == 0:
+        return ""
+    content = ""
+    for box in boxes:
+        category = box.category
+        x, y, w, h = box.x, box.y, box.width, box.height
+        line = f"{category} {x} {y} {w} {h}\n"
+        content += line
+    return content
+
+def make_patch_format(yolo_box, width, height):
+    x_c, y_c, w, h = yolo_box
+    x1 = x_c - w/2
+    y1 = y_c - h/2
+    x1 = x1 * width
+    y1 = y1 * height
+    w = w * width
+    h = h * height
+    return x1, y1, w, h
+
+
 
 if __name__ == "__main__":
     # test intersection_area_yolo, union_area_yolo, iou_yolo

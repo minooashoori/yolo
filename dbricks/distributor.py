@@ -72,6 +72,6 @@ def _spark_session(processes_count: int):
 
     try:
         yield spark
-    finally: 
+    finally:
         if owned:
             spark.stop()
