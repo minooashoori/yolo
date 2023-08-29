@@ -1,4 +1,4 @@
-from utils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative, yolo_annotations
+from utils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative, yolo_annotations, is_percentage
 from utils.paths import create_uris
 from pyspark.sql.functions import udf
 import pyspark.sql.functions as F
@@ -39,8 +39,9 @@ def boxes_to_dict(boxes, width, height, input_type, output_type, class_id=0):
     if isinstance(boxes, str):
         boxes = ast.literal_eval(boxes)
     for box in boxes:
-        transf_box =  relative(width=width, height=height, box=box) # just in case we have absolute coordinates
-        transf_box = transf_any_box(box, input_type, output_type)
+
+        transf_box = relative(width, height, box)
+        transf_box = transf_any_box(transf_box, input_type, output_type)
         transf_box = fix_bounds_relative(transf_box, output_type)
         if output_type in ["yolo", "xywh"]:
             x, y, w, h = transf_box
@@ -272,6 +273,7 @@ if __name__ == "__main__":
 
     # merge the faces together based on the iou threshold
     df =  df.withColumn("face_boxes", merge_boxes_udf("retina_boxes", "ias_boxes"))
+
 
     # undersample the faces
     df = undersample_faces(df)

@@ -141,47 +141,53 @@ def iou_yolo(box1, box2):
     return intersection_area_yolo(box1, box2) / union_area_yolo(box1, box2)
 
 
+def round_box(box):
+    return [round(coord, 4) for coord in box]
+
+
 def transf_any_box(box, input_type="xyxy", output_type="yolo"):
+    
+    
+    if input_type not in ["xyxy", "xywh", "yolo"]:
+        raise ValueError(f"input_type: {input_type} is not supported")
+    if output_type not in ["xyxy", "xywh", "yolo"]:
+        raise ValueError(f"output_type: {output_type} is not supported")
 
     if input_type == output_type:
-        return box
+        pass # do nothing
 
     # xyxy -> ...
     if input_type == "xyxy" and output_type == "yolo":
-        x_center, y_center, w, h = transform_xyxy_to_yolo(box)
-        return x_center, y_center, w, h
+        box = transform_xyxy_to_yolo(box)
+
 
     if input_type == "xyxy" and output_type == "xywh":
-        x1, y1, w, h = transform_xyxy_to_xywh(box)
-        return x1, y1, w, h
+        box = transform_xyxy_to_xywh(box)
 
     # xywh -> ...
     if input_type == "xywh" and output_type == "xyxy":
-        x1, y1, x2, y2 = transform_xywh_to_xyxy(box)
-        return x1, y1, x2, y2
+        box = transform_xywh_to_xyxy(box)
+
 
     if input_type == "xywh" and output_type == "yolo":
-        x_center, y_center, w, h = transform_xywh_to_yolo(box)
-        return x_center, y_center, w, h
+        box = transform_xywh_to_yolo(box)
 
     # yolo -> ...
     if input_type == "yolo" and output_type == "xyxy":
-        x1, y1, x2, y2 = transform_yolo_to_xyxy(box)
-        return x1, y1, x2, y2
+        box = transform_yolo_to_xyxy(box)
 
     if input_type == "yolo" and output_type == "xywh":
-        x1, y1, w, h = transform_yolo_to_xywh(box)
-        return x1, y1, w, h
+        box = transform_yolo_to_xywh(box)
 
-    raise ValueError(f"input_type: {input_type} and output_type: {output_type} are not supported")
+    box = round_box(box)
+    return box
+
 
 
 def relative(width, height, box):
     if not is_percentage(box):
         box = box[0]/width, box[1]/height, box[2]/width, box[3]/height
-        box = [round(coord, 4) for coord in box]
-        return box
-    return box
+    return [round(coord, 4) for coord in box]
 
 def ensure_bounds(coord, min_coord, max_coord):
     coord = max(coord, min_coord)
