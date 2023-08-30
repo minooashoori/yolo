@@ -233,6 +233,11 @@ def yolo_annotations(boxes):
     for box in boxes:
         category = box.category
         x, y, w, h = box.x, box.y, box.width, box.height
+        x = ensure_bounds(x, 0.001, 0.999)
+        y = ensure_bounds(y, 0.001, 0.999)
+        w = ensure_bounds(w, 0.001, 0.999)
+        h = ensure_bounds(h, 0.001, 0.999)
+        
         line = f"{category} {x} {y} {w} {h}\n"
         content += line
     return content

@@ -213,7 +213,7 @@ def fix_bounds_relative(box, box_type):
 
     new_box = []
     for coord in box:
-        new_box.append(ensure_bounds(coord, 0.0, 1.0))
+        new_box.append(ensure_bounds(coord, 0.001, 0.999))
 
     if box_type == "xyxy":
         new_box = ensure_order(new_box, box_type)
@@ -227,6 +227,11 @@ def yolo_annotations(boxes):
     for box in boxes:
         category = box.category
         x, y, w, h = box.x, box.y, box.width, box.height
+        x = ensure_bounds(x, 0.001, 0.999)
+        y = ensure_bounds(y, 0.001, 0.999)
+        w = ensure_bounds(w, 0.001, 0.999)
+        h = ensure_bounds(h, 0.001, 0.999)
+        
         line = f"{category} {x} {y} {w} {h}\n"
         content += line
     return content

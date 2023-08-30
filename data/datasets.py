@@ -147,6 +147,7 @@ class ImageDataset:
                     if member.name.endswith(".jpg"):
                         self._copy_file(tar, member, output_folder, "images")
                     elif member.name.endswith(".txt"):
+                        # TODO: if the file is empty, i.e., has an empty string "" we don't need to copy it
                         self._copy_file(tar, member, output_folder, "labels")
 
     def _copy_file(self, tar, member, output_folder, file_type):

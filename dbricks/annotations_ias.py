@@ -1,4 +1,4 @@
-from utils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative, yolo_annotations, is_percentage
+from utils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative, yolo_annotations, is_percentage, ensure_bounds
 from utils.paths import create_uris
 from pyspark.sql.functions import udf
 import pyspark.sql.functions as F
@@ -148,7 +148,7 @@ def plot_boxes(uri, retina_boxes, ias_boxes, face_boxes, width, height, retina_c
 
     plt.show()
 
-def undersample_faces(df, seed=42):
+def undersample_faces(df, seed=42, prop=0.8):
     # add a variable to indicate if the asset has a face box
     df = df.withColumn("has_face", F.when(F.size(F.col("face_boxes")) > 0, 1).otherwise(0))
     # same for number of boxes
@@ -169,7 +169,7 @@ def undersample_faces(df, seed=42):
     # we will undersample the assets with faces to match the assets with logos
     print("Undersampling the assets with faces to match the assets with logos...")
 
-    fraction_face_logo = n_assets_with_logo/n_assets_with_face
+    fraction_face_logo = prop*n_assets_with_logo/n_assets_with_face
     fraction_face_logo = min(fraction_face_logo, 1.0)
 
     df_face = df.filter((F.col("has_face") == 1) & (F.col("has_logo")== 0)).sample(False, fraction_face_logo, seed=seed)
@@ -179,7 +179,12 @@ def undersample_faces(df, seed=42):
     df_both = df.filter((F.col("has_face") == 1) & (F.col("has_logo")== 1))
     df_logo = df.filter((F.col("has_face") == 0) & (F.col("has_logo")== 1))
 
-    df = df_neither.union(df_both).union(df_logo).union(df_face)
+    df = df_both.union(df_neither).union(df_logo).union(df_face)
+
+    df_face.unpersist()
+    df_neither.unpersist()
+    df_both.unpersist()
+    df_logo.unpersist()
 
     print(f"Number of assets after undersampling faces: {df.count()}")
 
@@ -194,7 +199,7 @@ def undersample_backgrounds(df, prop=0.02):
     df_boxes = df.filter(F.size(F.col("boxes")) > 0)
 
     print(f"Number of assets with boxes: {df_boxes.count()}")
-    print(f"Number of assets without boxes: {df_no_boxes.count()}")
+    print(f"Number of assets without boxes (backgrounds): {df_no_boxes.count()}")
     # sample the assets without boxes to be max 2%*n_assets_with_boxes
     fraction = (prop*df_boxes.count())/df_no_boxes.count()
     fraction = min(fraction, 1.0)
@@ -206,6 +211,7 @@ def undersample_backgrounds(df, prop=0.02):
     # stack the two dataframes again
     df = df_boxes.union(df_no_boxes)
     print("Final number of assets: {}".format(df.count()))
+    df_no_boxes.unpersist()
 
     return df
 
@@ -288,16 +294,18 @@ if __name__ == "__main__":
     yolo_annotations_udf = udf(yolo_annotations, StringType())
     df = df.withColumn("yolo_annotations", yolo_annotations_udf("boxes"))
 
+    df.select("asset_id", "boxes", "yolo_annotations").show(10, truncate=False)
+
+
     df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type", "has_face", "n_face_boxes", "has_logo", "n_logo_boxes", "yolo_annotations")
     # create more uri columns
     df = create_uris(df)
 
-    print(f"Number of assets after merging the boxes: {df.count()}")
-
-
+    print(f"Splitting the dataframe into train, val and test")
     # split the dataframe into train, val and test
     train_df, val_df, test_df = split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1)
 
+    print("Saving the dataframes...")
     # save the dataframes with the annotations
     train_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/train/")
     val_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/val/")
