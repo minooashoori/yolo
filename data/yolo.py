@@ -1,6 +1,60 @@
 import glob
 import os
 import pandas as pd
+import glob
+
+
+# def yaml_writer(yolods_path: str, class_map: dict):
+#     """
+#     Write a yaml file with the class map
+#     """
+#     import yaml
+#     # list the folders in yolods_path
+#     folders = glob.glob(os.path.join(yolods_path, "*", "*"))
+#     folders = [folder.replace(yolods_path, "")[1:] for folder in folders]
+#     # remove the first / from the folder names
+#     for folder in folders:
+#         if folder.endswith("train"):
+            
+    
+
+
+
+    data_yaml = ""
+        
+    for split in self.splits:
+        data_yaml += f"{split}: {self.output_path_images}/{split}\n"
+    # add the number of classes
+    # add a line
+    data_yaml += "\n"
+    # add a comment
+    data_yaml += "# number of classes\n"
+    data_yaml += f"nc: {self.n_classes}\n"
+    
+    # add a line
+    data_yaml += "\n"
+    # add a comment
+    # add the class names
+    id_dict = {v["id"]: v["description"] for _, v in self.category_map.items()}
+    # sort the dictionary by key
+    id_dict = dict(sorted(id_dict.items()))
+    data_yaml += "# class names\n"
+    data_yaml += f"names: {list(id_dict.values())}"
+    
+    # we are done, write the file
+    with open(os.path.join(self.output_folder, "dataset.yaml"), "w") as f:
+        f.write(data_yaml)
+
+def _create_tar_archive(self):
+    # Create a tar archive of the entire output folder
+    tar_filename = os.path.join(self.tar_folder, self.dataset_name, "data.tar")
+    with tarfile.open(tar_filename, "w") as tar:
+        tar.add(self.output_folder, arcname="yolo")
+            
+
+
+
+
 
 class YOLODatasetWriter:
     
