@@ -1,0 +1,11 @@
+path: data/totalfusion_logodet
+train: images/train
+val: images/val
+
+# number of classes
+nc: 2
+
+# class names
+names:
+  0: 'face'
+  1: 'logo'

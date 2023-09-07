@@ -1,7 +1,6 @@
 from ultralytics import YOLO, settings
 import wandb
 
-import s3fs
 
 
 
@@ -13,17 +12,17 @@ import s3fs
 # # model = YOLO('yolov8n.yaml').load('/home/ec2-user/dev/yolo/runs/detect/train11/weights/last.pt') # or by string name
 
 
-model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train29/weights/best.pt')
+model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train36/weights/best.pt')
 
 
 # # train the model with an s3 dataset
-results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/yolov8/totalfusion.yaml",
+results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/yolov8/totalfusion_logodet3k.yaml",
                       epochs=50,
                       batch=128,
                       imgsz=416,
-                      mosaic=False, 
+                      mosaic=False,
+                      device=[0,1,2, 3],
+                      workers=32,
                       visualize=True)
 
 # results = model.train(data=data, epochs=100, imgsz=640)ls
-
-#

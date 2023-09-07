@@ -86,7 +86,7 @@ def merge_boxes(retina_boxes, ias_boxes, iou_threshold=0.25):
 def read_boxes_parquet(path, spark, alg_type:str):
     df = spark.read.parquet(path)
     df = df.drop("img_bytes").select("asset_id", "boxes")
-    df = df.repartition(1000)
+    df = df.repartition(100)
     df = df.withColumnRenamed("boxes", f"{alg_type}_boxes")
     df = df.dropDuplicates(["asset_id"])
     return df
@@ -149,15 +149,10 @@ def plot_boxes(uri, retina_boxes, ias_boxes, face_boxes, width, height, retina_c
     plt.show()
 
 def undersample_faces(df, seed=42, prop=0.8):
-    # add a variable to indicate if the asset has a face box
+
     df = df.withColumn("has_face", F.when(F.size(F.col("face_boxes")) > 0, 1).otherwise(0))
-    # same for number of boxes
     df = df.withColumn("n_face_boxes", F.size(F.col("face_boxes")))
-
-    # similarly add a variable to indicate if the asset has a logo box
     df = df.withColumn("has_logo", F.when(F.size(F.col("boxes")) > 0, 1).otherwise(0))
-
-    # add a variable to indicate the number of logo boxes
     df = df.withColumn("n_logo_boxes", F.size(F.col("boxes")))
 
     # Calculate the number of assets with face boxes only
@@ -181,10 +176,6 @@ def undersample_faces(df, seed=42, prop=0.8):
 
     df = df_both.union(df_neither).union(df_logo).union(df_face)
 
-    df_face.unpersist()
-    df_neither.unpersist()
-    df_both.unpersist()
-    df_logo.unpersist()
 
     print(f"Number of assets after undersampling faces: {df.count()}")
 
@@ -215,20 +206,28 @@ def undersample_backgrounds(df, prop=0.02):
 
     return df
 
-def split_df(df, fraction=0.8):
-    # split the dataframe into train and test
-    split_df = df.sample(False, fraction, seed=42)
-    remain_df = df.subtract(split_df)
+# def split_df(df, fraction=0.8):
+#     # split the dataframe into train and test
+#     split_df = df.sample(False, fraction, seed=42)
+#     remain_df = df.subtract(split_df)
 
-    return split_df, remain_df
+#     return split_df, remain_df
+
+# def split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1):
+#     # split the dataframe into train and test
+#     train_df, remain_df = split_df(df, train_fraction)
+
+#     # split the remaining dataframe into val and test
+#     val_df, test_df = split_df(remain_df, val_fraction/(val_fraction + test_fraction))
+
+#     return train_df, val_df, test_df
+
 
 def split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1):
-    # split the dataframe into train and test
-    train_df, remain_df = split_df(df, train_fraction)
+    fractions = [train_fraction, val_fraction, test_fraction]
+    splits = df.randomSplit(fractions, seed=42)
 
-    # split the remaining dataframe into val and test
-    val_df, test_df = split_df(remain_df, val_fraction/(val_fraction + test_fraction))
-
+    train_df, val_df, test_df = splits
     return train_df, val_df, test_df
 
 if __name__ == "__main__":
@@ -294,7 +293,6 @@ if __name__ == "__main__":
     yolo_annotations_udf = udf(yolo_annotations, StringType())
     df = df.withColumn("yolo_annotations", yolo_annotations_udf("boxes"))
 
-    df.select("asset_id", "boxes", "yolo_annotations").show(10, truncate=False)
 
 
     df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type", "has_face", "n_face_boxes", "has_logo", "n_logo_boxes", "yolo_annotations")
@@ -305,16 +303,20 @@ if __name__ == "__main__":
     # split the dataframe into train, val and test
     train_df, val_df, test_df = split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1)
 
+    print(f"Number of assets in train: {train_df.count()}")
+    print(f"Number of assets in val: {val_df.count()}")
+    print(f"Number of assets in test: {test_df.count()}")
+
     print("Saving the dataframes...")
     # save the dataframes with the annotations
     train_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/train/")
     val_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/val/")
     test_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/test/")
 
-    # csvs
-    train_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/train/", header=True)
-    val_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/val/", header=True)
-    test_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/test/", header=True)
+    # # csvs
+    # train_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/train/", header=True)
+    # val_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/val/", header=True)
+    # test_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/test/", header=True)
 
 
     #save the dataframe to parquet
