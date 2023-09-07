@@ -1,5 +1,5 @@
 from utils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative, yolo_annotations, is_percentage, ensure_bounds
-from utils.paths import create_uris
+from dbutils.paths import create_uris
 from pyspark.sql.functions import udf
 import pyspark.sql.functions as F
 from pyspark.sql.types import LongType, ArrayType, StructType, StructField, DoubleType, StringType
@@ -8,7 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as patches
 import ast
-from utils.paths import  innovation_path
+from dbutils.paths import  innovation_path
 import os
 
 TOTAL_FUSION_02_PATH = os.path.join(innovation_path("mnt"), "pdacosta", "data", "total_fusion_02")

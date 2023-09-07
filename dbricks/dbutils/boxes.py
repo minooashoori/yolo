@@ -146,8 +146,8 @@ def round_box(box):
 
 
 def transf_any_box(box, input_type="xyxy", output_type="yolo"):
-    
-    
+
+
     if input_type not in ["xyxy", "xywh", "yolo"]:
         raise ValueError(f"input_type: {input_type} is not supported")
     if output_type not in ["xyxy", "xywh", "yolo"]:
@@ -231,7 +231,7 @@ def yolo_annotations(boxes):
         y = ensure_bounds(y, 0.001, 0.999)
         w = ensure_bounds(w, 0.001, 0.999)
         h = ensure_bounds(h, 0.001, 0.999)
-        
+
         line = f"{category} {x} {y} {w} {h}\n"
         content += line
     return content

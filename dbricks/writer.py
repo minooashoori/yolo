@@ -2,8 +2,8 @@ import os
 from typing import List, Union
 from pyspark.sql import SparkSession
 from distributor import _spark_session
-from utils.paths import replace_s3_bucket_with_dbfs 
-from utils.paths import fix_dbfs_s3_path_for_spark
+from dbutils.paths import replace_s3_bucket_with_dbfs 
+from dbutils.paths import fix_dbfs_s3_path_for_spark
 import shutil
 import math
 import yaml

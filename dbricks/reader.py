@@ -8,7 +8,7 @@ import time
 import json
 from pyspark.sql import SparkSession
 from pyspark.sql import Row
-from utils.boxes import transform_box, intersection_area_yolo
+from dbutils.boxes import transform_box, intersection_area_yolo, ensure_bounds
 from pyspark.sql.functions import udf
 from pyspark.sql import Row
 import pyspark.sql.functions as F
@@ -165,7 +165,8 @@ class ReadProcessBoxes:
 
     def _transform_box_to_row(self, box, box_type, category_id):
 
-        box = [float(coord) for coord in box] # make sure all coordinates are floats
+        box = [round(float(coord), 4) for coord in box] # make sure all coordinates are floats
+        
 
         if box_type in ["yolo", "xywh"]:
             x, y, w, h = box
@@ -226,6 +227,8 @@ class ReadProcessBoxes:
                 continue
 
             transf_box = transform_box(box_coords, image_size, box_type, is_relative)
+            
+            transf_box =  [ensure_bounds(coord, 0.0001, 0.9999) for coord in transf_box]
 
             transf_row_box = self._transform_box_to_row(transf_box, box_type, category_id)
 
