@@ -8,6 +8,7 @@ import tarfile
 import shutil
 import glob
 import random
+import json
 
 from utils.boxes import plot_boxes
 from torch.utils.data import DataLoader
@@ -46,7 +47,9 @@ class ImageDataset:
                 annotation_col: str = "yolo_annotations",
                 output_folder: str = None,
                 output_format="webdataset",
-                overwrite=False) -> None:
+                overwrite=False,
+                resize_mode='keep_ratio_largest',
+                resize_only_if_bigger=True) -> None:
         """
         Downloads the dataset from s3 and saves it to disk.
         Note that we can also save directly to s3 if the output_folder is an s3 path.
@@ -59,16 +62,16 @@ class ImageDataset:
 
         if create_wds:
             i2d.download(
-                processes_count=32,
-                thread_count=32,
+                processes_count=8,
+                thread_count=8,
                 url_list=self.input_path,
                 output_folder=output_folder,
                 output_format=output_format,
                 input_format=input_format,
                 number_sample_per_shard=10000,
                 distributor="multiprocessing",
-                resize_mode="keep_ratio_largest",
-                resize_only_if_bigger=True,
+                resize_mode=resize_mode,
+                resize_only_if_bigger=resize_only_if_bigger,
                 enable_wandb=True,
                 encode_quality=90,
                 skip_reencode=True,
@@ -83,7 +86,8 @@ class ImageDataset:
             output_folder:str = None,
             wds_path:str = None,
             overwrite: bool = False,
-            prop: float = 1.0) -> None:
+            prop: float = 1.0,
+            keep_original_filenames=False) -> None:
         """
         Formats the dataset into a standard format used by yolo models.
         """
@@ -108,7 +112,7 @@ class ImageDataset:
 
             for tarball_file in tarball_files:
                 print(f"Processing {tarball_file}...")
-                self._process_tar(tarball_file, output_folder, prop)
+                self._process_tar(tarball_file, output_folder, prop, keep_original_filenames)
                 print(f"Finished processing {tarball_file}.")
         print(f"Finished formatting dataset into yolo format. Dataset saved in {output_folder}.")
 
@@ -144,28 +148,48 @@ class ImageDataset:
             else:
                 return False
         return True
+    
+    def _get_original_filename(self, tar, member):
+        
+         # json file with the same name
+        json_filename = member.name.replace(".jpg", ".json")
+        # read the original url from the json file 
+        dict_ = json.load(tar.extractfile(json_filename))
+        url = dict_["url"]
+        # get the filename from the url without the extension
+        filename = os.path.basename(url).split(".")[0]
+        return filename
 
-    def _process_tar(self, tar_path, output_folder, prop: float):
+    def _process_tar(self, tar_path, output_folder, prop: float, keep_original_filenames: bool = False):
         copied_images = set()
 
         with tarfile.open(tar_path, 'r') as tar:
             for member in tar.getmembers():
                 if member.isfile() and member.name.endswith((".jpg", ".txt")):
                     if member.name.endswith(".jpg") and random.random() < prop:
-                        self._copy_file(tar, member, output_folder, "images")
+                        if keep_original_filenames:
+                            filename = self._get_original_filename(tar, member)
+                        self._copy_file(tar, member, output_folder, "images", filename)
                         copied_images.add(member.name)
                     elif member.name.endswith(".txt"):
                         jpg_filename = member.name.replace(".txt", ".jpg")
                         if jpg_filename in copied_images and (member.size > 20 or self._is_non_empty_txt_file(tar, member)):
-                            self._copy_file(tar, member, output_folder, "labels")
+                            if keep_original_filenames:
+                                filename = self._get_original_filename(tar, member)
+                            self._copy_file(tar, member, output_folder, "labels", filename)
 
 
-    def _copy_file(self, tar, member, output_folder, file_type):
+    def _copy_file(self, tar, member, output_folder, file_type, filename=None):
 
         assert file_type in ["images", "labels"], "file_type must be one of images or labels"
-
-        filename = os.path.basename(member.name)
-        destination_path = os.path.join(output_folder, file_type, self.split, filename)
+        
+        if not filename:
+            filename = os.path.basename(member.name)
+        else:
+            # check if we have an extension
+            if not filename.endswith((".jpg", ".txt")):
+                filename = filename + ".jpg" if file_type == "images" else filename + ".txt"
+            destination_path = os.path.join(output_folder, file_type, self.split, filename)
 
         # make sure the destination folder exists
         if not os.path.exists(os.path.dirname(destination_path)):
@@ -194,6 +218,12 @@ class LogoDet3KDataset(ImageDataset):
         super().__init__(split, input_path)
         self.name = "logodet3k"
 
+class Logo05Dataset(ImageDataset):
+
+    def __init__(self, split: str, input_path: str) -> None:
+        super().__init__(split, input_path)
+        self.name = "logo05"
+
 
 if  __name__ == "__main__":
 
@@ -216,17 +246,17 @@ if  __name__ == "__main__":
     # tfusion_train.format_yolo()
 
 
-    logodet3k_val = LogoDet3KDataset(
-        split="val",
-        input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/val/"
-    )
-    logodet3k_val.download(input_format="parquet",
-                           url_col="uri",
-                           overwrite=False)
-    logodet3k_val.format_yolo()
-    
-    
-    
+    # logodet3k_val = LogoDet3KDataset(
+    #     split="val",
+    #     input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/val/"
+    # )
+    # logodet3k_val.download(input_format="parquet",
+    #                        url_col="uri",
+    #                        overwrite=False)
+    # logodet3k_val.format_yolo()
+
+
+
     # logodet3k_train = LogoDet3KDataset(
     #     split="train",
     #     input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/train/"
@@ -235,4 +265,16 @@ if  __name__ == "__main__":
     #                        url_col="uri",
     #                        overwrite=False)
     # logodet3k_train.format_yolo()
+    
+    logo05_test =  Logo05Dataset(
+        split="test",
+        input_path="s3://mls.us-east-1.innovation/pdacosta/data/logo05/annotations/gts_preds/parquet/xywh/test/"
+    )
+    logo05_test.download(input_format="parquet",
+                          url_col="uri",
+                          resize_mode="no",
+                          annotation_col=None,
+                          overwrite=False
+    )
+    logo05_test.format_yolo(overwrite=True, keep_original_filenames=True)
     

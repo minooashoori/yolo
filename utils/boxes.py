@@ -253,7 +253,7 @@ def make_patch_format(yolo_box, width, height):
     return x1, y1, w, h
 
 
-def get_boxes_from_yolo_annotation(annotation):
+def get_boxes_from_annotation(annotation):
     # open the annotation file
     # check if it's a file or a string
     if os.path.isfile(annotation):
@@ -270,21 +270,32 @@ def get_boxes_from_yolo_annotation(annotation):
         lines = lines[:-1]
     # split each line by space
     lines = [line.split(" ") for line in lines]
-    # convert each line to a list of  int and floats
-    lines = [[int(line[0]), float(line[1]), float(line[2]), float(line[3]), float(line[4])] for line in lines]
-    return lines
+    # if len(line) == 6 then we have cls, conf, x, y, w, h
+    # if len(line) == 5 then we have cls, x, y, w, h
+    boxes = []
+    for line in lines:
+        if len(line) == 6:
+            line = [int(line[0]), float(line[2]), float(line[3]), float(line[4]), float(line[5])]
+        elif len(line) == 5:
+            line = [int(line[0]), float(line[1]), float(line[2]), float(line[3]), float(line[4])]
+        else:
+            raise ValueError(f"Line: {line} has length {len(line)} but it should be 5 or 6")
+        boxes.append(line)
+    return boxes
 
 
-def plot_boxes(path_or_img, boxes=None, yolo_annotation=None, save=False):
+def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=False):
 
-    if boxes is None and yolo_annotation is None:
-        raise ValueError("Either boxes or yolo_annotation must be provided.")
-    if boxes is not None and yolo_annotation is not None:
-        raise ValueError("Only one of boxes or yolo_annotation must be provided.")
+    if boxes is None and annotation is None:
+        raise ValueError("Either boxes or annotation must be provided.")
+    if boxes is not None and annotation is not None:
+        raise ValueError("Only one of boxes or annotation must be provided.")
+
+    assert box_type in ["yolo", "xywh"], "box_type must be one of: 'yolo', 'xywh'"
 
 
-    if yolo_annotation is not None:
-        boxes = get_boxes_from_yolo_annotation(yolo_annotation)
+    if annotation is not None:
+        boxes = get_boxes_from_annotation(annotation)
         # get the number of categories
         categories = [box[0] for box in boxes]
         categories = set(categories)
@@ -302,7 +313,7 @@ def plot_boxes(path_or_img, boxes=None, yolo_annotation=None, save=False):
     elif isinstance(path_or_img, np.ndarray):
         # read the numpy array as a PIL image
         # check if it's in the range 0-1 or 0-255
-        if path_or_img.max() <= 1.0:        
+        if path_or_img.max() <= 1.0:
             path_or_img = path_or_img * 255
 
         path_or_img = path_or_img.astype(np.uint8)
@@ -318,15 +329,21 @@ def plot_boxes(path_or_img, boxes=None, yolo_annotation=None, save=False):
     colors = {category: color for category, color in zip(categories, colors_list)}
     # we need to make the figure and the axes
     fig, ax = plt.subplots(1)
-
+    print(boxes)
     ax.imshow(img)
     if len(boxes) > 0:
         for box_ in boxes:
             category, box = box_[0], box_[1:]
-            x1, y1, w, h = make_patch_format(box, width, height)
+            if box_type == "yolo":
+                # x1, y1, w, h = make_patch_format(box, width, height)
+                x1, y1, w, h = transf_any_box(box, input_type="yolo", output_type="xywh")
+                print(x1, y1, w, h)
+            else:
+                x1, y1, w, h = box
             color = colors[category]
             # create a rectangle patch
             rect = patches.Rectangle((x1, y1), w, h, linewidth=2, edgecolor=color, facecolor='none')
+            # rect = patches.Rectangle((10, 10), 50, 50, linewidth=2, edgecolor=color, facecolor='none')
             # add the patch to the axes
             ax.add_patch(rect)
     if save:
