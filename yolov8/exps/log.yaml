@@ -1,0 +1,3 @@
+train56: nano, best map, tfusion+logodet3k, started from train36,volcanic-yogurt-23
+train36: nano, best map, tfusion, bumbling-cloud
+train39: med, best map, tfusion+logodet3k, started from coco , super-dew-25

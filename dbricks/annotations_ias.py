@@ -1,4 +1,4 @@
-from utils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative, yolo_annotations, is_percentage, ensure_bounds
+from dbutils.boxes import transform_box, iou_yolo, transf_any_box, fix_bounds_relative, relative, yolo_annotations, is_percentage, ensure_bounds
 from dbutils.paths import create_uris
 from pyspark.sql.functions import udf
 import pyspark.sql.functions as F
@@ -17,8 +17,14 @@ INPUT_PATH_RETINA_EXTRA = os.path.join(TOTAL_FUSION_02_PATH, "retina", "extra", 
 INPUT_PATH_INTERNAL_FACE_DETECTOR =  os.path.join(TOTAL_FUSION_02_PATH, "internal_face_detector", "annotations")
 INPUT_PATH_DATANET = os.path.join(TOTAL_FUSION_02_PATH, "merged", "train_dataset", "complete")
 
+
+LOGO05_PATH = os.path.join(innovation_path("mnt"), "pdacosta", "data", "logo05")
+INPUT_PATH_LOGO05_TRAIN = os.path.join(LOGO05_PATH, "annotations/train/metadata/")
+INPUT_PATH_LOGO05_TEST = os.path.join(LOGO05_PATH, "annotations/test/metadata/")
+
 OUTPUT_PATH = os.path.join(TOTAL_FUSION_02_PATH, "annotations")
 OUTPUT_PARQUET_PATH =  os.path.join(OUTPUT_PATH, "parquet")
+OUTPUT_PARQUET_PATH_LOGO05 =  os.path.join(OUTPUT_PATH, "parquet", "logo_05")
 OUTPUT_CSV_PATH = os.path.join(OUTPUT_PATH, "csv")
 
 
@@ -148,7 +154,7 @@ def plot_boxes(uri, retina_boxes, ias_boxes, face_boxes, width, height, retina_c
 
     plt.show()
 
-def undersample_faces(df, seed=42, prop=0.8):
+def undersample_faces(df, seed=42, prop=0.6):
 
     df = df.withColumn("has_face", F.when(F.size(F.col("face_boxes")) > 0, 1).otherwise(0))
     df = df.withColumn("n_face_boxes", F.size(F.col("face_boxes")))
@@ -162,12 +168,15 @@ def undersample_faces(df, seed=42, prop=0.8):
     n_assets_with_logo = df.filter((F.col("has_face") == 0) & (F.col("has_logo") == 1)).count()
 
     # we will undersample the assets with faces to match the assets with logos
-    print("Undersampling the assets with faces to match the assets with logos...")
+    print(f"Number of assets with ONLY faces: {n_assets_with_face}")
+    print(f"Number of assets with ONLY logos: {n_assets_with_logo}")
+    print(f"Undersampling the assets with faces with proportion {prop} of logos...")
 
     fraction_face_logo = prop*n_assets_with_logo/n_assets_with_face
     fraction_face_logo = min(fraction_face_logo, 1.0)
 
     df_face = df.filter((F.col("has_face") == 1) & (F.col("has_logo")== 0)).sample(False, fraction_face_logo, seed=seed)
+    print(f"Number of assets with ONLY faces after undersampling: {df_face.count()}")
 
     # remove the assets with faces and no logos from df, ie keep only the assets with logos, or with both or neither
     df_neither = df.filter((F.col("has_face") == 0) & (F.col("has_logo")== 0))
@@ -184,7 +193,8 @@ def undersample_faces(df, seed=42, prop=0.8):
 def undersample_backgrounds(df, prop=0.02):
 
     # split the rows that don't have a box
-    df_no_boxes = df.filter(F.size(F.col("boxes")) == 0)
+    # df_no_boxes = df.filter(F.size(F.col("boxes")) == 0)
+    df_no_boxes = df.filter((F.col('has_face') == 0) & (F.col('has_logo') == 0))
 
     # split the rows that have a box
     df_boxes = df.filter(F.size(F.col("boxes")) > 0)
@@ -223,6 +233,41 @@ def undersample_backgrounds(df, prop=0.02):
 #     return train_df, val_df, test_df
 
 
+def split_train_val_with_column(df, column: str):
+    # Use a single filter operation to split the DataFrame
+    train_df_logos = df.filter(F.col(column) == 1)
+    val_df_logos = df.filter(F.col(column) == 0)
+    
+    # Count the rows directly
+    n_train = train_df_logos.count()
+    n_val = val_df_logos.count()
+
+    print(f"Number of assets from logo gt train: {n_train}")
+    print(f"Number of assets from logo gt val: {n_val}")
+    
+    total = n_train + n_val
+    print(f"Total number of assets from logo gt: {total}")
+
+    # Use a single filter operation for assets without logo gt
+    df_no_logos = df.filter(F.col(column).isNull())
+    
+    print(f"Number of assets without logo gt: {df_no_logos.count()}")
+    
+    prop_train = n_train / total
+    prop_val = n_val / total
+    print(f"Proportion of assets with logo gt in train: {prop_train}")
+    print(f"Proportion of assets with logo gt in val: {prop_val}")
+    print("Sampling the assets without logo gt with the same proportions...")
+
+    # Sample the assets without logo gt using the proportions
+    df_no_logos_train, df_no_logos_val = df_no_logos.randomSplit([prop_train, prop_val], seed=42)
+
+    # Union the DataFrames
+    train_df = train_df_logos.union(df_no_logos_train)
+    val_df = val_df_logos.union(df_no_logos_val)
+
+    return train_df, val_df
+
 def split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1):
     fractions = [train_fraction, val_fraction, test_fraction]
     splits = df.randomSplit(fractions, seed=42)
@@ -230,41 +275,68 @@ def split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction
     train_df, val_df, test_df = splits
     return train_df, val_df, test_df
 
+def remove_logo_pseudolabels(df):
+    # drop the boxes column
+    df = df.drop("boxes")
+    return df
+    
+
+def left_join_logo_gts(df, logo_gts_df):
+    # join the datanet_df with the logo05_df on uri
+    df = df.join(logo_gts_df, on="uri", how="left")
+    df = df.dropDuplicates(["uri"])
+    return df
+
+def replace_nulls_with_empty_list(boxes):
+    if boxes is None:
+        return []
+    else:
+        return boxes
+
 if __name__ == "__main__":
     from pyspark.sql import SparkSession
     spark = SparkSession.builder.getOrCreate()
+    
+    keep_only_real_gt_logos = True
 
     # read parquet files from a directory in pyspark
-    # retina_df_1 = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/retina/annotations/", spark, "retina")
-    # retina_df_2 = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/retina/extra/annotations/", spark, "retina")
-    # retina_df = retina_df_1.union(retina_df_2).dropDuplicates(["asset_id"])
 
     retina_df_1 =  read_boxes_parquet(INPUT_PATH_RETINA, spark, "retina")
     retina_df_2 =  read_boxes_parquet(INPUT_PATH_RETINA_EXTRA, spark, "retina")
     retina_df = retina_df_1.union(retina_df_2).dropDuplicates(["asset_id"])
 
 
-    # read ias boxes - ie those from the internal face detector
-    # ias_df = read_boxes_parquet("/mnt/innovation/pdacosta/data/total_fusion_02/internal_face_detector/annotations/", spark, "ias")
-    ias_df = read_boxes_parquet(INPUT_PATH_INTERNAL_FACE_DETECTOR, spark, "ias")
+    # # read ias boxes - ie those from the internal face detector
+    ias_faces_df = read_boxes_parquet(INPUT_PATH_INTERNAL_FACE_DETECTOR, spark, "ias")
 
-    # merge the retina_df with the ias_df anc create faces_df
-    faces_df = ias_df.join(retina_df, on="asset_id", how="inner")
+    # # merge the retina_df with the ias_df anc create faces_df
+    faces_df = ias_faces_df.join(retina_df, on="asset_id", how="inner")
 
     # read the datanet dataframe - this only contains logo boxes
-    # datanet_df = spark.read.parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/complete/")
     datanet_df = spark.read.parquet(INPUT_PATH_DATANET)
     datanet_df = datanet_df.dropDuplicates(["asset_id"])
+    if keep_only_real_gt_logos:
+        
+        logo05_train_df = spark.read.parquet(INPUT_PATH_LOGO05_TRAIN).select("uri", "boxes").withColumn("is_train", F.lit(1))
+        logo05_test_df = spark.read.parquet(INPUT_PATH_LOGO05_TEST).select("uri", "boxes").withColumn("is_train", F.lit(0))
+        # union the train and test dataframes
+        logo05_df = logo05_train_df.union(logo05_test_df)
+
+        print("datanet count:", datanet_df.count())
+        print("logo05 count:", logo05_df.count())
+
+        # merge the datanet_df with the logo05_df on uri and keep only the columns uri and boxes
+        gt_logos_df = datanet_df.select("uri").join(logo05_df, on="uri", how="inner").select("uri", "boxes", "is_train")
+        
+        print("gt_logos_df count:", gt_logos_df.count())
+        
+
+
 
     # merge the faces_df with the datanet_df and  cache
     df = faces_df.join(datanet_df, on="asset_id", how="inner")
     df = df.cache()
 
-    #unpersist the dataframes
-    faces_df.unpersist()
-    datanet_df.unpersist()
-    retina_df.unpersist()
-    ias_df.unpersist()
 
     # create a udf to transform the boxes
     transform_boxes_udf = udf(boxes_to_dict, OUTPUT_SCHEMA_BOX)
@@ -279,83 +351,101 @@ if __name__ == "__main__":
     # merge the faces together based on the iou threshold
     df =  df.withColumn("face_boxes", merge_boxes_udf("retina_boxes", "ias_boxes"))
 
-
-    # undersample the faces
+    print("df count:", df.count())
+    if keep_only_real_gt_logos:
+        # remove the old boxes column and add the one with the real gt logos
+        df = remove_logo_pseudolabels(df)
+        df = left_join_logo_gts(df, gt_logos_df)
+        print("df count after join with gts (should be the same):", df.count())
+        replace_nulls_with_empty_list_udf = udf(replace_nulls_with_empty_list, OUTPUT_SCHEMA_BOX)
+        df = df.withColumn("boxes", replace_nulls_with_empty_list_udf("boxes"))
+    
+    # # # undersample the faces
     df = undersample_faces(df)
 
-    # merge the face boxes with the logo boxes
+    # # # merge the face boxes with the logo boxes
     df = df.withColumn("boxes", F.concat(F.col("boxes"), F.col("face_boxes"))).drop("face_boxes")
 
-    # undersample the backgrounds
+    # # undersample the backgrounds
     df = undersample_backgrounds(df, prop=0.02)
 
-    # make yolo annotations
+    # # # make yolo annotations
     yolo_annotations_udf = udf(yolo_annotations, StringType())
     df = df.withColumn("yolo_annotations", yolo_annotations_udf("boxes"))
 
 
-
     df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type", "has_face", "n_face_boxes", "has_logo", "n_logo_boxes", "yolo_annotations")
-    # create more uri columns
+    # # create more uri columns
     df = create_uris(df)
 
     print(f"Splitting the dataframe into train, val and test")
-    # split the dataframe into train, val and test
-    train_df, val_df, test_df = split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1)
+    # # split the dataframe into train, val and test
+    if keep_only_real_gt_logos:
+        train_df, val_df = split_train_val_with_column(df, "is_train")
+        
+    else:
+        train_df, val_df, test_df = split_train_val_test(df, train_fraction=0.8, val_fraction=0.1, test_fraction=0.1)
 
     print(f"Number of assets in train: {train_df.count()}")
     print(f"Number of assets in val: {val_df.count()}")
-    print(f"Number of assets in test: {test_df.count()}")
+    # if test_df:
+    #     print(f"Number of assets in test: {test_df.count()}")
 
     print("Saving the dataframes...")
-    # save the dataframes with the annotations
-    train_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/train/")
-    val_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/val/")
-    test_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/test/")
+    
+    if keep_only_real_gt_logos:
+        train_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH_LOGO05 + "/train/")
+        val_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH_LOGO05 + "/val/")
+    else:
+        # save the dataframes with the annotations
+        train_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/train/")
+        val_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/val/")
+        if test_df:
+            test_df.write.mode("overwrite").parquet(OUTPUT_PARQUET_PATH + "/test/")
 
-    # # csvs
-    # train_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/train/", header=True)
-    # val_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/val/", header=True)
-    # test_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/test/", header=True)
-
-
-    #save the dataframe to parquet
-    # df.write.mode("overwrite").parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/undersampled/")
-
-    # # show the statistics by has_face and has_logo
-    # df.groupBy("has_face", "has_logo").count().show(truncate=False)
-
-    # # show the statistics by n_face_boxes, n_logo_boxes
-    # df.groupBy("n_face_boxes").count().show(truncate=False)
-    # df.groupBy("n_logo_boxes").count().show(truncate=False)
+    # # # csvs
+    # # train_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/train/", header=True)
+    # # val_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/val/", header=True)
+    # # test_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/test/", header=True)
 
 
-    # # select a sample of 100 assets in which both algorithms detected faces
-    # sample_size = 200/df.count()
-    # df_sample = df.filter((F.size(F.col("face_boxes")) > 0) & (F.size(F.col("boxes")) > 0)).sample(False, sample_size, seed=42)
+    # #save the dataframe to parquet
+    # # df.write.mode("overwrite").parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/undersampled/")
 
-    # df_sample = df_sample.select("asset_id", "width", "height", "ias_boxes", "retina_boxes", "uri", "face_boxes", "boxes")
+    # # # show the statistics by has_face and has_logo
+    # # df.groupBy("has_face", "has_logo").count().show(truncate=False)
 
-    # # collect the sample and transform to a python dictionary
-    # sample = df_sample.collect()
+    # # # show the statistics by n_face_boxes, n_logo_boxes
+    # # df.groupBy("n_face_boxes").count().show(truncate=False)
+    # # df.groupBy("n_logo_boxes").count().show(truncate=False)
 
-    # # create a dictionary with the asset_id as key and the uri as value
-    # asset_dict = {row["asset_id"]:
-    #     {"uri": row["uri"],
-    #      "ias_boxes": [ [r["x"], r["y"], r["width"], r["height"] ] for r in row["ias_boxes"]],
-    #      "retina_boxes": [[r["x"], r["y"], r["width"], r["height"]] for r in row["retina_boxes"]],
-    #      "face_boxes": [[r["x"], r["y"], r["width"], r["height"]] for r in row["face_boxes"]],
-    #      "boxes": [[r["x"], r["y"], r["width"], r["height"]] for r in row["boxes"]],
-    #      "width": row["width"],
-    #      "height": row["height"]} for row in sample}
 
-    # # plot the images with the boxes
-    # for asset_id, asset in asset_dict.items():
-    #     uri = asset["uri"]
-    #     ias_boxes = asset["ias_boxes"]
-    #     retina_boxes = asset["retina_boxes"]
-    #     face_boxes = asset["face_boxes"]
-    #     boxes = asset["boxes"]
-    #     width = asset["width"]
-    #     height = asset["height"]
-    #     plot_boxes(uri, boxes, None, face_boxes, width, height)
+    # # # select a sample of 100 assets in which both algorithms detected faces
+    # # sample_size = 200/df.count()
+    # # df_sample = df.filter((F.size(F.col("face_boxes")) > 0) & (F.size(F.col("boxes")) > 0)).sample(False, sample_size, seed=42)
+
+    # # df_sample = df_sample.select("asset_id", "width", "height", "ias_boxes", "retina_boxes", "uri", "face_boxes", "boxes")
+
+    # # # collect the sample and transform to a python dictionary
+    # # sample = df_sample.collect()
+
+    # # # create a dictionary with the asset_id as key and the uri as value
+    # # asset_dict = {row["asset_id"]:
+    # #     {"uri": row["uri"],
+    # #      "ias_boxes": [ [r["x"], r["y"], r["width"], r["height"] ] for r in row["ias_boxes"]],
+    # #      "retina_boxes": [[r["x"], r["y"], r["width"], r["height"]] for r in row["retina_boxes"]],
+    # #      "face_boxes": [[r["x"], r["y"], r["width"], r["height"]] for r in row["face_boxes"]],
+    # #      "boxes": [[r["x"], r["y"], r["width"], r["height"]] for r in row["boxes"]],
+    # #      "width": row["width"],
+    # #      "height": row["height"]} for row in sample}
+
+    # # # plot the images with the boxes
+    # # for asset_id, asset in asset_dict.items():
+    # #     uri = asset["uri"]
+    # #     ias_boxes = asset["ias_boxes"]
+    # #     retina_boxes = asset["retina_boxes"]
+    # #     face_boxes = asset["face_boxes"]
+    # #     boxes = asset["boxes"]
+    # #     width = asset["width"]
+    # #     height = asset["height"]
+    # #     plot_boxes(uri, boxes, None, face_boxes, width, height)

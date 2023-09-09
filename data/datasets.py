@@ -166,6 +166,7 @@ class ImageDataset:
         with tarfile.open(tar_path, 'r') as tar:
             for member in tar.getmembers():
                 if member.isfile() and member.name.endswith((".jpg", ".txt")):
+                    filename = None
                     if member.name.endswith(".jpg") and random.random() < prop:
                         if keep_original_filenames:
                             filename = self._get_original_filename(tar, member)
@@ -189,7 +190,7 @@ class ImageDataset:
             # check if we have an extension
             if not filename.endswith((".jpg", ".txt")):
                 filename = filename + ".jpg" if file_type == "images" else filename + ".txt"
-            destination_path = os.path.join(output_folder, file_type, self.split, filename)
+        destination_path = os.path.join(output_folder, file_type, self.split, filename)
 
         # make sure the destination folder exists
         if not os.path.exists(os.path.dirname(destination_path)):
@@ -224,6 +225,11 @@ class Logo05Dataset(ImageDataset):
         super().__init__(split, input_path)
         self.name = "logo05"
 
+class Logo05FusionDataset(ImageDataset):
+
+    def __init__(self, split: str, input_path: str) -> None:
+        super().__init__(split, input_path)
+        self.name = "logo05fusion"
 
 if  __name__ == "__main__":
 
@@ -255,8 +261,6 @@ if  __name__ == "__main__":
     #                        overwrite=False)
     # logodet3k_val.format_yolo()
 
-
-
     # logodet3k_train = LogoDet3KDataset(
     #     split="train",
     #     input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/train/"
@@ -266,15 +270,37 @@ if  __name__ == "__main__":
     #                        overwrite=False)
     # logodet3k_train.format_yolo()
     
-    logo05_test =  Logo05Dataset(
-        split="test",
-        input_path="s3://mls.us-east-1.innovation/pdacosta/data/logo05/annotations/gts_preds/parquet/xywh/test/"
+    # logo05_test =  Logo05Dataset(
+    #     split="test",
+    #     input_path="s3://mls.us-east-1.innovation/pdacosta/data/logo05/annotations/gts_preds/parquet/xywh/test/"
+    # )
+    # logo05_test.download(input_format="parquet",
+    #                       url_col="uri",
+    #                       resize_mode="no",
+    #                       annotation_col=None,
+    #                       overwrite=False
+    # )
+    # logo05_test.format_yolo(overwrite=True, keep_original_filenames=True)
+    
+    # logo05fusion_train = Logo05FusionDataset(
+    #     split="train",
+    #     input_path = "s3://mls.us-east-1.innovation/pdacosta/data/total_fusion_02/annotations/parquet/logo_05/train/",
+    # )
+    # logo05fusion_train.download(input_format="parquet",
+    #                             url_col="s3_uri",
+    #                             annotation_col="yolo_annotations",
+    #                             overwrite=False)
+    
+    # logo05fusion_train.format_yolo(overwrite=True)
+    
+    logo05fusion_val = Logo05FusionDataset(
+        split="val",
+        input_path = "s3://mls.us-east-1.innovation/pdacosta/data/total_fusion_02/annotations/parquet/logo_05/val/",
     )
-    logo05_test.download(input_format="parquet",
-                          url_col="uri",
-                          resize_mode="no",
-                          annotation_col=None,
-                          overwrite=False
-    )
-    logo05_test.format_yolo(overwrite=True, keep_original_filenames=True)
+    logo05fusion_val.download(input_format="parquet",
+                                url_col="s3_uri",
+                                annotation_col="yolo_annotations",
+                                overwrite=True)
+    
+    logo05fusion_val.format_yolo(overwrite=True)
     

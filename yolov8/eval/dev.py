@@ -8,9 +8,9 @@ IMG_FOLDER = "/home/ec2-user/dev/data/logo05/yolo/images/test"
 OUTPUT_FOLDER = "/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo"
 
 
-model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train39/weights/best.pt') #
+model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train39/weights/best.pt') # yolom trained on all the data+logodet3k
 batch_size = 1
-results = model(IMG_FOLDER, stream=True)
+results = model(IMG_FOLDER, stream=True, conf=0.20)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 for res in results:
