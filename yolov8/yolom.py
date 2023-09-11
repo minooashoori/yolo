@@ -2,12 +2,14 @@ from ultralytics import YOLO, settings
 import wandb
 
 # model = YOLO('yolov8m.yaml')
-model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train39/weights/best.pt')
+# model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train39/weights/best.pt')
+model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train51/weights/best.pt')
 
+# results = model.train(resume=True)
 
 # # train the model with an s3 dataset
 results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/yolov8/logo05fusion.yaml",
-                      epochs=150,
+                      epochs=50,
                       batch=256,
                       imgsz=416,
                       mosaic=False,
@@ -18,7 +20,7 @@ results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/yolov8/logo
                       warmup_epochs=0,
                       pretrained=True,
                       # fraction=0.1,
-                    #   lr0=0.001,
+                      lr0=0.005,
                       save_conf=True,
                       save_crop=True,
                       augment=True,

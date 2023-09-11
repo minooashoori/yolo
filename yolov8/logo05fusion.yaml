@@ -1,4 +1,4 @@
-path: data/logo05fusion/yolo
+path: data/logo05fusionplusmanual/yolo
 train: images/train
 val: images/val
 

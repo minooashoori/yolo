@@ -190,6 +190,48 @@ def undersample_faces(df, seed=42, prop=0.6):
 
     return df
 
+
+def undersample_faces_based_on_pseudolabels(df, seed=42, prop=0.6):
+    
+    
+    df = df.withColumn("has_face", F.when(F.size(F.col("face_boxes")) > 0, 1).otherwise(0))
+    # df = df.withColumn("n_face_boxes", F.size(F.col("face_boxes")))
+    df = df.withColumn("has_logo", F.when(F.size(F.col("boxes")) > 0, 1).otherwise(0))
+    # df = df.withColumn("n_logo_boxes", F.size(F.col("boxes")))
+    df = df.withColumn("has_pseudologo", F.when(F.size(F.col("pseudo_boxes")) > 0, 1).otherwise(0))
+
+    # Calculate the number of assets with face boxes only based on the pseudo labels for logos
+    df_face = df.filter((F.col("has_face") == 1) & (F.col("has_pseudologo") == 0))
+    n_assets_with_face = df_face.count()
+
+    # Calculate the number of assets with logo boxes only
+    n_assets_with_logo = df.filter((F.col("has_face") == 0) & (F.col("has_logo") == 1)).count()
+
+    # we will undersample the assets with faces to match the assets with logos
+    print(f"Number of assets with ONLY faces: {n_assets_with_face}")
+    print(f"Number of assets with ONLY logos: {n_assets_with_logo}")
+    print(f"Undersampling the assets with faces with proportion {prop} of logos...")
+
+    fraction_face_logo = prop*n_assets_with_logo/n_assets_with_face
+    fraction_face_logo = min(fraction_face_logo, 1.0)
+
+    df_face = df_face.sample(False, fraction_face_logo, seed=seed)
+    print(f"Number of assets with ONLY faces after undersampling: {df_face.count()}")
+
+    # remove the assets with faces and no logos from df, ie keep only the assets with logos, or with both or neither
+    df_neither = df.filter((F.col("has_face") == 0) & (F.col("has_logo")== 0))
+    df_both = df.filter((F.col("has_face") == 1) & (F.col("has_logo")== 1))
+    df_logo = df.filter((F.col("has_face") == 0) & (F.col("has_logo")== 1))
+
+    df = df_both.union(df_neither).union(df_logo).union(df_face)
+
+
+    print(f"Number of assets after undersampling faces: {df.count()}")
+
+    return df
+
+
+
 def undersample_backgrounds(df, prop=0.02):
 
     # split the rows that don't have a box
@@ -354,14 +396,16 @@ if __name__ == "__main__":
     print("df count:", df.count())
     if keep_only_real_gt_logos:
         # remove the old boxes column and add the one with the real gt logos
-        df = remove_logo_pseudolabels(df)
+        df = df.withColumnRenamed("boxes", "pseudo_boxes")
         df = left_join_logo_gts(df, gt_logos_df)
         print("df count after join with gts (should be the same):", df.count())
         replace_nulls_with_empty_list_udf = udf(replace_nulls_with_empty_list, OUTPUT_SCHEMA_BOX)
         df = df.withColumn("boxes", replace_nulls_with_empty_list_udf("boxes"))
-    
-    # # # undersample the faces
-    df = undersample_faces(df)
+        df = undersample_faces_based_on_pseudolabels(df)
+        df = df.drop("pseudo_boxes")
+    else:
+        # # # undersample the faces
+        df = undersample_faces(df)
 
     # # # merge the face boxes with the logo boxes
     df = df.withColumn("boxes", F.concat(F.col("boxes"), F.col("face_boxes"))).drop("face_boxes")
@@ -374,7 +418,7 @@ if __name__ == "__main__":
     df = df.withColumn("yolo_annotations", yolo_annotations_udf("boxes"))
 
 
-    df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type", "has_face", "n_face_boxes", "has_logo", "n_logo_boxes", "yolo_annotations")
+    df = df.select("asset_id", "uri", "width", "height", "boxes", "box_type", "has_face", "has_logo", "yolo_annotations")
     # # create more uri columns
     df = create_uris(df)
 
@@ -407,17 +451,6 @@ if __name__ == "__main__":
     # # train_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/train/", header=True)
     # # val_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/val/", header=True)
     # # test_df.select("s3_uri", "width", "height", "yolo_annotations").repartition(1).write.mode("overwrite").csv(OUTPUT_CSV_PATH + "/test/", header=True)
-
-
-    # #save the dataframe to parquet
-    # # df.write.mode("overwrite").parquet("/mnt/innovation/pdacosta/data/total_fusion_02/merged/train_dataset/undersampled/")
-
-    # # # show the statistics by has_face and has_logo
-    # # df.groupBy("has_face", "has_logo").count().show(truncate=False)
-
-    # # # show the statistics by n_face_boxes, n_logo_boxes
-    # # df.groupBy("n_face_boxes").count().show(truncate=False)
-    # # df.groupBy("n_logo_boxes").count().show(truncate=False)
 
 
     # # # select a sample of 100 assets in which both algorithms detected faces

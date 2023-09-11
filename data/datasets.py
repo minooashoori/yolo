@@ -62,8 +62,8 @@ class ImageDataset:
 
         if create_wds:
             i2d.download(
-                processes_count=8,
-                thread_count=8,
+                processes_count=32,
+                thread_count=32,
                 url_list=self.input_path,
                 output_folder=output_folder,
                 output_format=output_format,
@@ -282,16 +282,16 @@ if  __name__ == "__main__":
     # )
     # logo05_test.format_yolo(overwrite=True, keep_original_filenames=True)
     
-    # logo05fusion_train = Logo05FusionDataset(
-    #     split="train",
-    #     input_path = "s3://mls.us-east-1.innovation/pdacosta/data/total_fusion_02/annotations/parquet/logo_05/train/",
-    # )
-    # logo05fusion_train.download(input_format="parquet",
-    #                             url_col="s3_uri",
-    #                             annotation_col="yolo_annotations",
-    #                             overwrite=False)
+    logo05fusion_train = Logo05FusionDataset(
+        split="train",
+        input_path = "s3://mls.us-east-1.innovation/pdacosta/data/total_fusion_02/annotations/parquet/logo_05/train/",
+    )
+    logo05fusion_train.download(input_format="parquet",
+                                url_col="s3_uri",
+                                annotation_col="yolo_annotations",
+                                overwrite=True)
     
-    # logo05fusion_train.format_yolo(overwrite=True)
+    logo05fusion_train.format_yolo(overwrite=True)
     
     logo05fusion_val = Logo05FusionDataset(
         split="val",
