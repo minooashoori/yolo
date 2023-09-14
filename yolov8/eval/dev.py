@@ -8,19 +8,23 @@ IMG_FOLDER = "/home/ec2-user/dev/data/logo05/yolo/images/test"
 OUTPUT_FOLDER = "/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo"
 
 # train51 - best so far
-model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train55/weights/last.pt') #
-batch_size = 1
-# results = model(IMG_FOLDER, stream=True, conf=0.20)
-results = model("/home/ec2-user/dev/data/logo05fusion/yolo/images/val/000000023.jpg", stream=True, conf=0.1)
+# train61 - epoch 27 - 0.1
+# model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train61/weights/epoch27.pt') #
+
+model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train62/weights/epoch9.pt') #
+
+
+# results = model(IMG_FOLDER, stream=True, conf=0.1)
+results = model("/home/ec2-user/dev/ctx-logoface-detector/metrics/Screenshot 2023-09-13 at 10.36.29.png", stream=True, conf=0.1)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 for res in results:
     print(res.boxes)
     im_array = res.plot()  # plot a BGR numpy array of predictions
     im = Image.fromarray(im_array[..., ::-1])  # RGB PIL image
-    im.show()  # show image
-    im.save('results.jpg')  # save image
-    
+    # im.show()  # show image
+    im.save('/home/ec2-user/dev/ctx-logoface-detector/results.jpg')  # save image
+
     # cls = res.boxes.cls.to("cpu").tolist()
     # conf = res.boxes.conf.to("cpu").tolist()
     # boxes_xywh = res.boxes.xywh.to("cpu").tolist()

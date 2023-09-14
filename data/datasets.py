@@ -62,8 +62,8 @@ class ImageDataset:
 
         if create_wds:
             i2d.download(
-                processes_count=32,
-                thread_count=32,
+                processes_count=8,
+                thread_count=8,
                 url_list=self.input_path,
                 output_folder=output_folder,
                 output_format=output_format,
@@ -87,7 +87,8 @@ class ImageDataset:
             wds_path:str = None,
             overwrite: bool = False,
             prop: float = 1.0,
-            keep_original_filenames=False) -> None:
+            keep_original_filenames=False,
+            get_original_url_width_height=False) -> None:
         """
         Formats the dataset into a standard format used by yolo models.
         """
@@ -101,10 +102,12 @@ class ImageDataset:
         output_folder = output_folder or self._create_output_folder("yolo")
         images_folder = os.path.join(output_folder, "images", self.split)
         labels_folder = os.path.join(output_folder, "labels", self.split)
+        
+   
 
         create_yolo = self._handle_existing_output_folder(images_folder, overwrite) and self._handle_existing_output_folder(labels_folder, overwrite)
 
-
+        urls_, widths_, heights_ = [], [], []
         if create_yolo:
             # get the list of tar files
 
@@ -112,9 +115,13 @@ class ImageDataset:
 
             for tarball_file in tarball_files:
                 print(f"Processing {tarball_file}...")
-                self._process_tar(tarball_file, output_folder, prop, keep_original_filenames)
+                urls, widths, heights = self._process_tar(tarball_file, output_folder, prop, keep_original_filenames, get_original_url_width_height)
                 print(f"Finished processing {tarball_file}.")
+                urls_.extend(urls), widths_.extend(widths), heights_.extend(heights)
         print(f"Finished formatting dataset into yolo format. Dataset saved in {output_folder}.")
+        
+        if get_original_url_width_height:
+            return urls_, widths_, heights_
 
 
     @staticmethod
@@ -149,10 +156,30 @@ class ImageDataset:
                 return False
         return True
     
+    
+    
+    def _get_original_url_width_height(self, tar, member):
+        # json file with the same name
+        # if it's a  .jpg file, we need to get the corresponding json file
+        if member.name.endswith(".jpg"):
+            json_filename = member.name.replace(".jpg", ".json")
+        elif member.name.endswith(".txt"):
+            json_filename = member.name.replace(".txt", ".json")
+        # read the original url from the json file 
+        dict_ = json.load(tar.extractfile(json_filename))
+        url = dict_["url"]
+        width = dict_["original_width"]
+        height = dict_["original_height"]
+        return url, width, height
+
+
     def _get_original_filename(self, tar, member):
-        
+
          # json file with the same name
-        json_filename = member.name.replace(".jpg", ".json")
+        if member.name.endswith(".jpg"):
+            json_filename = member.name.replace(".jpg", ".json")
+        elif member.name.endswith(".txt"):
+            json_filename = member.name.replace(".txt", ".json")
         # read the original url from the json file 
         dict_ = json.load(tar.extractfile(json_filename))
         url = dict_["url"]
@@ -160,16 +187,20 @@ class ImageDataset:
         filename = os.path.basename(url).split(".")[0]
         return filename
 
-    def _process_tar(self, tar_path, output_folder, prop: float, keep_original_filenames: bool = False):
+    def _process_tar(self, tar_path, output_folder, prop: float, keep_original_filenames: bool = False, get_original_url_width_height: bool =False):
         copied_images = set()
-
+        urls, widths, heights = [], [], []
         with tarfile.open(tar_path, 'r') as tar:
             for member in tar.getmembers():
                 if member.isfile() and member.name.endswith((".jpg", ".txt")):
                     filename = None
                     if member.name.endswith(".jpg") and random.random() < prop:
+                        print(f"Processing {member.name}...")
                         if keep_original_filenames:
                             filename = self._get_original_filename(tar, member)
+                        if get_original_url_width_height:
+                            url, width, height = self._get_original_url_width_height(tar, member)
+                            urls.append(url), widths.append(width), heights.append(height)
                         self._copy_file(tar, member, output_folder, "images", filename)
                         copied_images.add(member.name)
                     elif member.name.endswith(".txt"):
@@ -178,6 +209,7 @@ class ImageDataset:
                             if keep_original_filenames:
                                 filename = self._get_original_filename(tar, member)
                             self._copy_file(tar, member, output_folder, "labels", filename)
+        return urls, widths, heights
 
 
     def _copy_file(self, tar, member, output_folder, file_type, filename=None):
@@ -191,6 +223,7 @@ class ImageDataset:
             if not filename.endswith((".jpg", ".txt")):
                 filename = filename + ".jpg" if file_type == "images" else filename + ".txt"
         destination_path = os.path.join(output_folder, file_type, self.split, filename)
+        print(f"Copying {member.name} to {destination_path}...")
 
         # make sure the destination folder exists
         if not os.path.exists(os.path.dirname(destination_path)):
@@ -230,6 +263,13 @@ class Logo05FusionDataset(ImageDataset):
     def __init__(self, split: str, input_path: str) -> None:
         super().__init__(split, input_path)
         self.name = "logo05fusion"
+
+class PortalDataset(ImageDataset):
+
+    def __init__(self, split: str, input_path: str) -> None:
+        super().__init__(split, input_path)
+        self.name = "portal"
+
 
 if  __name__ == "__main__":
 
@@ -282,25 +322,51 @@ if  __name__ == "__main__":
     # )
     # logo05_test.format_yolo(overwrite=True, keep_original_filenames=True)
     
-    logo05fusion_train = Logo05FusionDataset(
-        split="train",
-        input_path = "s3://mls.us-east-1.innovation/pdacosta/data/total_fusion_02/annotations/parquet/logo_05/train/",
-    )
-    logo05fusion_train.download(input_format="parquet",
-                                url_col="s3_uri",
-                                annotation_col="yolo_annotations",
-                                overwrite=True)
+    # logo05fusion_train = Logo05FusionDataset(
+    #     split="train",
+    #     input_path = "s3://mls.us-east-1.innovation/pdacosta/data/total_fusion_02/annotations/parquet/logo_05/train/",
+    # )
+    # logo05fusion_train.download(input_format="parquet",
+    #                             url_col="s3_uri",
+    #                             annotation_col="yolo_annotations",
+    #                             overwrite=True)
     
-    logo05fusion_train.format_yolo(overwrite=True)
+    # logo05fusion_train.format_yolo(overwrite=True)
     
-    logo05fusion_val = Logo05FusionDataset(
+    # logo05fusion_val = Logo05FusionDataset(
+    #     split="val",
+    #     input_path = "s3://mls.us-east-1.innovation/pdacosta/data/total_fusion_02/annotations/parquet/logo_05/val/",
+    # )
+    # logo05fusion_val.download(input_format="parquet",
+    #                             url_col="s3_uri",
+    #                             annotation_col="yolo_annotations",
+    #                             overwrite=True)
+    
+    # logo05fusion_val.format_yolo(overwrite=True)
+    
+    # portal_train = PortalDataset(
+    #     split="train",
+    #     input_path = "/home/ec2-user/dev/data/portal/train.parquet",
+    # )
+    
+    # portal_train.download(input_format="parquet",
+    #                         url_col="s3_uri",
+    #                         annotation_col="yolo_annotations",
+    #                         overwrite=False)
+    
+    # portal_train.format_yolo(overwrite=True, keep_original_filenames=True, get_original_url_width_height=False)
+    
+    
+    portal_test = PortalDataset(
         split="val",
-        input_path = "s3://mls.us-east-1.innovation/pdacosta/data/total_fusion_02/annotations/parquet/logo_05/val/",
+        input_path = "/home/ec2-user/dev/data/portal/test.parquet",
     )
-    logo05fusion_val.download(input_format="parquet",
-                                url_col="s3_uri",
-                                annotation_col="yolo_annotations",
-                                overwrite=True)
     
-    logo05fusion_val.format_yolo(overwrite=True)
+    portal_test.download(input_format="parquet",
+                            url_col="s3_uri",
+                            annotation_col="yolo_annotations",
+                            overwrite=True)
+    
+    portal_test.format_yolo(overwrite=True, keep_original_filenames=True, get_original_url_width_height=False)
+    
     
