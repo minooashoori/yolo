@@ -54,12 +54,16 @@ class Detector:
         """
         Load a TorchScript model for inference.
         Args:
-            w (str): path to TorchScript model
-            device (torch.device): torch device to load the model on
-            fp16 (bool): whether to use fp16 precision or not
+            w (str): The path to the TorchScript model file.
+            device (torch.device): The target torch device where the model should be loaded (e.g., "cuda:0" for GPU or "cpu" for CPU).
+            fp16 (bool):  Whether to use 16-bit floating-point precision (half-precision) for inference, which can be more memory-efficient.
 
         Returns:
-            _type_: _description_
+            Tuple[torch.jit.ScriptModule, dict]: A tuple containing the loaded model as a TorchScript ScriptModule and a dictionary
+            containing metadata associated with the model (e.g., model configuration).
+
+        Example:
+            model, metadata = Detector._load_jit("model.torchscript", torch.device("cuda:0"), fp16=True)
         """
 
         # logger.info(f'Loading {w} for TorchScript Runtime inference...')
@@ -92,6 +96,16 @@ class Detector:
         return conf_thrs
 
     def warmup(self) -> None:
+        """
+        Warm up the detector model.
+
+        This method prepares the detector model for inference by generating random input images and running
+        them through the detector. It ensures that the model is loaded and initialized properly.
+
+        Returns:
+            None
+        """
+
         # logger.info("Warming up the detector model...")
         print("Warming up the detector model...")
         im = np.array(np.random.uniform(0, 255, [self.imgsz, self.imgsz, 3]), dtype=np.float32)
@@ -113,10 +127,10 @@ class Detector:
         ims, n_ims = self._preprocess(ims)
         preds = self.predict(ims)
         detections = self._postprocess(preds, n_ims, original_shapes)
-        
+
         #sanity check
         assert len(detections) == n_ims, f"Number of detections {len(detections)} does not match number of images {n_ims}"
-        
+
         return detections
 
 
@@ -179,7 +193,6 @@ class Detector:
             frames, boxes, scores, labels = self._ensure_min_size(frames, boxes, scores, labels)
 
             detections = self._stitch_results(frames, boxes, scores, labels, n_ims)
-
 
         return detections if detections else [[] for _ in range(n_ims)]
 
