@@ -133,13 +133,11 @@ class Detector:
         assert self._images_same_shapes(ims)
 
         n_ims = len(ims)
-        
         batch_size = self.batch_size if self.batch_size != -1 else n_ims
 
         assert batch_size >= n_ims, f"Batch size must be greater than or equal to number of images or set as -1 for dynamic batch size."
 
-        if n_ims < batch_size:
-            print(f"Batch size {batch_size} is greater than number of images {n_ims}. Padding with black images.")
+        if batch_size > n_ims:
             n_ims_add = batch_size - n_ims
             black_im = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.float32) # HWC
             ims += [black_im for _ in range(n_ims_add)] # [B x [HWC]]
