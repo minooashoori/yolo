@@ -112,7 +112,7 @@ class Detector:
 
         ims, n_ims = self._preprocess(ims)
         preds = self.predict(ims)
-        detections = self._postprocess(preds, original_shapes, n_ims)
+        detections = self._postprocess(preds, n_ims, original_shapes)
         
         #sanity check
         assert len(detections) == n_ims, f"Number of detections {len(detections)} does not match number of images {n_ims}"
@@ -162,7 +162,7 @@ class Detector:
         return frames[select], boxes[select], scores[select], labels[select]
 
 
-    def _postprocess(self, preds, orig_shapes, n_ims):
+    def _postprocess(self, preds, n_ims, orig_shapes=None):
 
         frames, boxes, scores, labels = non_max_suppression(preds, conf_thres_classes=self.conf_thres_classes)
 
@@ -174,8 +174,7 @@ class Detector:
         if boxes.numel() > 0:
             boxes = self._normalize_boxes(boxes)
 
-            if orig_shapes:
-                boxes = self._reshape_boxes(boxes, frames, orig_shapes)
+            boxes = self._reshape_boxes(boxes, frames, orig_shapes) if orig_shapes else boxes
 
             frames, boxes, scores, labels = self._ensure_min_size(frames, boxes, scores, labels)
 
