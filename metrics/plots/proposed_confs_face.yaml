@@ -1,0 +1,7 @@
+'0':
+  precision:
+    conf: 0.06
+    target: 0.83
+  recall:
+    conf: 0.03
+    target: 0.46
