@@ -1,20 +1,9 @@
 import argparse
 import os
-import sys
-import glob
-import matplotlib.pyplot as plt
 import yaml
-from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
 import numpy as np
-
-args = argparse.ArgumentParser()
-args.add_argument("--prod", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/saved_results/results_logos_prod.yaml")
-args.add_argument("--prod_threshold", type=float, default=0.01)
-args.add_argument("--dev", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/saved_results/results_logos_yolom.yaml")
-
-
-args = args.parse_args()
-
+from scipy.interpolate import interp1d
 
 def find_confidence(acc_metric, confs, m_value):
     inter_f =  interp1d(acc_metric, confs, kind='linear')
@@ -66,14 +55,14 @@ def plot_prec_or_recall_conf(metrics, m: str, type_: str, proposed_confidence_th
             plt.axhline(y=target_value, color="lightgray", linestyle="--", label=f"conf: {proposed_conf} - target {m}: {target_value}")
 
 
-def plot_prec_or_recall_conf_all(prod_data, dev_data, m: str, proposed_confidence_th):
+def plot_prec_or_recall_conf_all(prod_data, dev_data, m: str, proposed_confidence_th, save_dir, model, c):
     # start with precision
     prod_metrics = get_prec_recall_ap(prod_data)
     dev_metrics = get_prec_recall_ap(dev_data)
     # close all plots
     plt.close('all')
     plot_prec_or_recall_conf(prod_metrics, m ,"prod")
-    plot_prec_or_recall_conf(dev_metrics, m ,"yolov8m", proposed_confidence_th)
+    plot_prec_or_recall_conf(dev_metrics, m , model, proposed_confidence_th)
 
     plt.xlabel("confidence")
     #invert x axis if we are plotting precision
@@ -81,33 +70,35 @@ def plot_prec_or_recall_conf_all(prod_data, dev_data, m: str, proposed_confidenc
         plt.gca().invert_xaxis()
     plt.ylabel(m)
     # add mAP for prod and dev on the top of the plot
-    plt.title(f"mAP: prod: {round(prod_data['mAP'], 2)} - yolov8m: {round(dev_data['mAP'], 2)}")
+    plt.title(f"mAP: prod: {round(prod_data['mAP'], 2)} - {model}: {round(dev_data['mAP'], 2)}")
     plt.legend()
     plt.grid()
-    plt.savefig(f"{m}_conf.png")
+    # add saved dir
+    plt.savefig(os.path.join(save_dir, f"{m}_conf_{c}.png"))
     plt.show()
     plt.clf()
 
 
-def plot_prec_recall_all(prod_data, dev_data):
+def plot_prec_recall_all(prod_data, dev_data, save_dir, model:str, c):
     prod_metrics = get_prec_recall_ap(prod_data)
     dev_metrics = get_prec_recall_ap(dev_data)
     # close all plots
     plt.close('all')
     plot_prec_recall(prod_metrics, "prod")
-    plot_prec_recall(dev_metrics, "yolov8m")
+    plot_prec_recall(dev_metrics, model)
     plt.xlabel("Recall")
     plt.ylabel("Precision")
-    plt.title(f"mAP: prod: {round(prod_data['mAP'], 2)} - yolov8m: {round(dev_data['mAP'], 2)}")
+    plt.title(f"mAP: prod: {round(prod_data['mAP'], 2)} - {model}: {round(dev_data['mAP'], 2)}")
     plt.legend()
     plt.grid()
-    plt.savefig("precision_recall.png")
+    #add saved dir
+    plt.savefig(os.path.join(save_dir, f"prec_recall_{c}.png"))
     plt.show()
     plt.clf()
 
 
 def get_confidence_threshold(prod_data, dev_data):
-    
+
     proposed_confs = {}
     # get the mininum precision of prod
     prod_metrics = get_prec_recall_ap(prod_data)
@@ -116,16 +107,16 @@ def get_confidence_threshold(prod_data, dev_data):
     for cl, metric in prod_metrics.items():
         precision_prod = metric["precision"]
         recall_prod = metric["recall"]
-        
+
         # get the targets from prod
         prec_target_value = min(precision_prod)
         recall_target_value = max(recall_prod)
-        
+
         # get the precision for the target precision
         precision_dev = dev_metrics[cl]["precision"]
         recall_dev = dev_metrics[cl]["recall"]
         confs_dev = dev_metrics[cl]["confs"]
-        
+
         # get the confidence for the target precision
         conf_prec_target = find_confidence(precision_dev, confs_dev, prec_target_value)
         # same for recall
@@ -135,7 +126,7 @@ def get_confidence_threshold(prod_data, dev_data):
         recall_target_value = round(recall_target_value, 2)
         conf_prec_target = round(float(conf_prec_target), 2)
         conf_recall_target = round(float(conf_recall_target), 2)
-        
+
         proposed_confs[cl] = {"precision": {"target": prec_target_value, "conf": conf_prec_target}, "recall": {"target": recall_target_value, "conf": conf_recall_target}}
     return proposed_confs
 
@@ -143,13 +134,26 @@ def main(args):
     data_prod = get_data(args.prod)
     data_dev = get_data(args.dev)
     proposed_confidence_th = get_confidence_threshold(data_prod, data_dev)
-    plot_prec_or_recall_conf_all(data_prod, data_dev, "precision", proposed_confidence_th)
-    plot_prec_or_recall_conf_all(data_prod, data_dev, "recall", proposed_confidence_th)
-    plot_prec_recall_all(data_prod, data_dev)
+    plot_prec_or_recall_conf_all(data_prod, data_dev, "precision", proposed_confidence_th, args.save_dir, args.model, args.c)
+    plot_prec_or_recall_conf_all(data_prod, data_dev, "recall", proposed_confidence_th, args.save_dir, args.model, args.c)
+    plot_prec_recall_all(data_prod, data_dev, args.save_dir, args.model, args.c)
     print(proposed_confidence_th)
     # save the proposed confidences
-    with open("proposed_confidences.yaml", "w") as f:
+    with open(os.path.join(args.save_dir, f"proposed_confs_{args.c}.yaml"), "w") as f:
         yaml.dump(proposed_confidence_th, f)
 
-main(args)
+
+if __name__ == "__main__":
+
+    args = argparse.ArgumentParser()
+    args.add_argument("--prod", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/save/prod_face.yaml")
+    args.add_argument("--dev", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/save/yolov8s_face.yaml")
+    args.add_argument("--save_dir", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/plots")
+    args.add_argument("--c",  type=str, default="face")
+    args.add_argument("--model",  type=str, default="yolov8s")
+
+    args = args.parse_args()
+
+
+    main(args)
 
