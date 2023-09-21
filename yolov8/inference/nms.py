@@ -116,7 +116,7 @@ def non_max_suppression(
             x = x[x[:, 4].argsort(descending=True)[:max_nms]]  # sort by confidence and remove excess boxes
 
         if xi == 1:
-            continue
+            continue # TODO: remove this line
         
         # Batched NMS
         c = x[:, 5:6] * max_wh  # classes this is will offset the boxes so they do not overlap

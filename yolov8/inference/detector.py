@@ -14,7 +14,7 @@ class Detector:
         self,
         model_path: str,
         confidence_thresholds: dict = None,
-        detection_min_size_percentage: int = 0.1,
+        detection_min_size_percentage: int = 0.04,
         batch_size: int = -1,
         fp16: bool = True,
         device: str = "cuda:0",
@@ -28,19 +28,20 @@ class Detector:
             raise NotImplementedError(f'Model path suffix must be .torchscript got {model_path}')
 
         # check confidence thresholds
-        self.conf_thres_classes = self._check_thresholds(confidence_thresholds, class_map)
+        self.conf_thres_classes = self._check_thresholds(confidence_thresholds, self.class_map)
 
         self.model, self.metadata = None, None
+        self.fp16 = fp16
 
         self.device = torch.device(device)
         self.cuda = torch.cuda.is_available() and self.device.type != 'cpu'
         if not self.cuda:
             self.cuda = False
 
-        self.model, self.metadata = self._load_jit(model_path, device, fp16)
+        self.model, self.metadata = self._load_jit(model_path, self.device, self.fp16)
         self.batch_size = batch_size 
         self.imgsz = 416
-        self.names = metadata['names']
+        self.names = self.metadata['names']
 
         self.detection_min_size_percentage = detection_min_size_percentage
 
@@ -107,7 +108,7 @@ class Detector:
         Args:
             ims (List[np.ndarray]): list of images in numpy format w/ format [h, w, c]
         Returns:
-            torch.Tensor: BCHW tensor
+            torch.Tensor: BCHW tensor with images in the range [0, 1]
         """
 
         assert self._images_same_shapes(ims)
@@ -137,30 +138,55 @@ class Detector:
         return frames[select], boxes[select], scores[select], labels[select]
 
 
-
-    def _postprocess(self, preds, orig_shapes, n_imgs):
+    def _postprocess(self, preds, orig_shapes, n_ims):
 
         frames, boxes, scores, labels = non_max_suppression(preds, conf_thres_classes=self.conf_thres_classes)
 
         print(f"frames: {frames}")
         print(f"scores: {scores}")
-        
+
         # remove detections that are not for the original images
-        frames, boxes, scores, labels = self._filter(frames < 1, frames, boxes, scores, labels)
+        frames, boxes, scores, labels = self._filter(frames < n_ims, frames, boxes, scores, labels)
         print("after filter")
         print(f"frames: {frames}")
         print(f"scores: {scores}")
 
-
         # only run if we got boxes
+        detections = None
         if boxes.numel() > 0:
-
+            print("we got boxes")
+            print(f"boxes: {boxes}")
             boxes = self._normalize_boxes(boxes)
+            print(f"boxes after norm: {boxes}")
 
             if orig_shapes:
                 boxes = self._reshape_boxes(boxes, frames, orig_shapes)
 
             frames, boxes, scores, labels = self._ensure_min_size(frames, boxes, scores, labels)
+
+            detections = self._stitch_results(frames, boxes, scores, labels, n_ims)
+
+        return detections if detections else []
+    
+    def _stitch_results(self, frames, boxes, scores, labels, n_ims):
+        """
+        Stitches  results together
+        """
+
+        # cast all tensors to numpy arrays on the cpu
+        frames = frames.cpu().numpy()
+        boxes = boxes.cpu().numpy()
+        scores = scores.cpu().numpy()
+        labels = labels.cpu().numpy()
+
+        results = []
+        for i in range(n_ims):
+            select = np.equal(frames, i)
+            res  = []
+            for box, label, score in zip(boxes[select], labels[select], scores[select]):
+                res.append([box, str(label).encode("utf-8"), score])
+            results.append(res)
+        return results
 
     def _ensure_min_size(self, frames, boxes, scores, labels) -> torch.Tensor:
 
@@ -173,6 +199,7 @@ class Detector:
         box_size_select = torch.logical_and((boxes[:, 2] - boxes[:, 0]) > self.detection_min_size_percentage,
                                             (boxes[:, 3] - boxes[:, 1]) > self.detection_min_size_percentage,
                                             )
+        print(f"box_size_select: {box_size_select}")
 
         # filter the tensors
         boxes = boxes[box_size_select]
@@ -249,7 +276,8 @@ if __name__ == '__main__':
     # print(img)
     img = [img for _ in range(3)]
     orig_shapes = [[400, 400], [800, 800], [600, 600]]
-    detector.detect(img, orig_shapes)
+    detections = detector.detect(img, orig_shapes)
+    print(detections)
 
 
 
