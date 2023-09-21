@@ -115,9 +115,6 @@ def non_max_suppression(
         if n > max_nms:  # excess boxes
             x = x[x[:, 4].argsort(descending=True)[:max_nms]]  # sort by confidence and remove excess boxes
 
-        if xi == 1:
-            continue # TODO: remove this line
-        
         # Batched NMS
         c = x[:, 5:6] * max_wh  # classes this is will offset the boxes so they do not overlap
         boxes, scores = x[:, :4] + c, x[:, 4]  # boxes (offset by class), scores
@@ -129,7 +126,6 @@ def non_max_suppression(
         #concat frame number to output
         output[xi] = torch.cat((frame.unsqueeze(1), output[xi]), 1)
 
-    # print(output)
 
 
 

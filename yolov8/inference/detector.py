@@ -3,7 +3,7 @@ import torch.nn as nn
 from pathlib import Path
 import json
 import numpy as np
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from nms import non_max_suppression
 # from compute_common.logger import logger
 torch.set_printoptions(sci_mode=False)
@@ -39,7 +39,9 @@ class Detector:
             self.cuda = False
 
         self.model, self.metadata = self._load_jit(model_path, self.device, self.fp16)
-        self.batch_size = batch_size 
+        self.batch_size = batch_size
+
+
         self.imgsz = 416
         self.names = self.metadata['names']
 
@@ -48,7 +50,18 @@ class Detector:
         self.warmup() # warmup the model
 
     @staticmethod
-    def _load_jit(w, device, fp16):
+    def _load_jit(w: str, device: torch.device, fp16: bool) -> Tuple[torch.jit.ScriptModule, dict]:
+        """
+        Load a TorchScript model for inference.
+        Args:
+            w (str): path to TorchScript model
+            device (torch.device): torch device to load the model on
+            fp16 (bool): whether to use fp16 precision or not
+
+        Returns:
+            _type_: _description_
+        """
+
         # logger.info(f'Loading {w} for TorchScript Runtime inference...')
         print(f'Loading {w} for TorchScript Runtime inference...')
         extra_files = {'config.txt': ''}  # model metadata
@@ -60,7 +73,7 @@ class Detector:
         return model, metadata
 
     @staticmethod
-    def _check_thresholds(conf_thrs: dict, class_map: dict) -> None:
+    def _check_thresholds(conf_thrs: dict, class_map: dict) -> List[float]:
 
         conf_thrs = conf_thrs or {134533: 0.2, 90020: 0.1}
 
@@ -82,7 +95,9 @@ class Detector:
         # logger.info("Warming up the detector model...")
         print("Warming up the detector model...")
         im = np.array(np.random.uniform(0, 255, [self.imgsz, self.imgsz, 3]), dtype=np.float32)
-        im = [im for _ in range(self.batch_size)]
+
+        im = [im for _ in range(self.batch_size)] if self.batch_size > 1 else [im]
+
         self.detect(im)
         # logger.info("Warmup finished.")
         print("Warmup finished.")
@@ -97,8 +112,12 @@ class Detector:
 
         ims, n_ims = self._preprocess(ims)
         preds = self.predict(ims)
-        res = self._postprocess(preds, original_shapes, n_ims)
-        return res
+        detections = self._postprocess(preds, original_shapes, n_ims)
+        
+        #sanity check
+        assert len(detections) == n_ims, f"Number of detections {len(detections)} does not match number of images {n_ims}"
+        
+        return detections
 
 
     def _preprocess(self, ims: List[np.ndarray]) -> torch.Tensor:
@@ -114,9 +133,14 @@ class Detector:
         assert self._images_same_shapes(ims)
 
         n_ims = len(ims)
+        
+        batch_size = self.batch_size if self.batch_size != -1 else n_ims
 
-        if self.batch_size and n_ims > self.batch_size:
-            n_ims_add = self.batch_size - n_ims
+        assert batch_size >= n_ims, f"Batch size must be greater than or equal to number of images or set as -1 for dynamic batch size."
+
+        if n_ims < batch_size:
+            print(f"Batch size {batch_size} is greater than number of images {n_ims}. Padding with black images.")
+            n_ims_add = batch_size - n_ims
             black_im = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.float32) # HWC
             ims += [black_im for _ in range(n_ims_add)] # [B x [HWC]]
 
@@ -124,6 +148,8 @@ class Detector:
         ims = torch.from_numpy(np.stack(ims)).permute(0, 3, 1, 2).contiguous() # BCHW
         ims = ims.to(self.device)
         ims = ims.half() if self.fp16 else ims.float() # uint8 to fp16/32
+        # check if  we indeed are  using the right dtype
+        assert ims.dtype == torch.float16 if self.fp16 else torch.float32
         ims /= 255.0 # 0 - 255 to 0.0 - 1.0
         return ims, n_ims
 
@@ -142,22 +168,13 @@ class Detector:
 
         frames, boxes, scores, labels = non_max_suppression(preds, conf_thres_classes=self.conf_thres_classes)
 
-        print(f"frames: {frames}")
-        print(f"scores: {scores}")
-
         # remove detections that are not for the original images
         frames, boxes, scores, labels = self._filter(frames < n_ims, frames, boxes, scores, labels)
-        print("after filter")
-        print(f"frames: {frames}")
-        print(f"scores: {scores}")
 
         # only run if we got boxes
         detections = None
         if boxes.numel() > 0:
-            print("we got boxes")
-            print(f"boxes: {boxes}")
             boxes = self._normalize_boxes(boxes)
-            print(f"boxes after norm: {boxes}")
 
             if orig_shapes:
                 boxes = self._reshape_boxes(boxes, frames, orig_shapes)
@@ -166,11 +183,16 @@ class Detector:
 
             detections = self._stitch_results(frames, boxes, scores, labels, n_ims)
 
-        return detections if detections else []
-    
-    def _stitch_results(self, frames, boxes, scores, labels, n_ims):
+
+        return detections if detections else [[] for _ in range(n_ims)]
+
+    def _stitch_results(self, frames: torch.Tensor, 
+                        boxes: torch.Tensor, 
+                        scores: torch.Tensor, 
+                        labels: torch.Tensor, 
+                        n_ims: int) -> List[List[Union[List[float], str, float]]]:
         """
-        Stitches  results together
+        Stitch results together
         """
 
         # cast all tensors to numpy arrays on the cpu
@@ -183,8 +205,8 @@ class Detector:
         for i in range(n_ims):
             select = np.equal(frames, i)
             res  = []
-            for box, label, score in zip(boxes[select], labels[select], scores[select]):
-                res.append([box, str(label).encode("utf-8"), score])
+            for box, label, score in zip(boxes[select].tolist(), labels[select], scores[select]):
+                res.append([box, str(label).encode("utf-8"), float(score)])
             results.append(res)
         return results
 
@@ -199,7 +221,6 @@ class Detector:
         box_size_select = torch.logical_and((boxes[:, 2] - boxes[:, 0]) > self.detection_min_size_percentage,
                                             (boxes[:, 3] - boxes[:, 1]) > self.detection_min_size_percentage,
                                             )
-        print(f"box_size_select: {box_size_select}")
 
         # filter the tensors
         boxes = boxes[box_size_select]
@@ -266,7 +287,7 @@ class Detector:
 
 if __name__ == '__main__':
 
-    detector = Detector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript", batch_size=3)
+    detector = Detector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript", batch_size=-1)
 
     # read an image from path and convert it to numpy
     img_path = "/home/ec2-user/dev/data/logo05fusion/yolo/images/val/000000053.jpg"
@@ -278,45 +299,3 @@ if __name__ == '__main__':
     orig_shapes = [[400, 400], [800, 800], [600, 600]]
     detections = detector.detect(img, orig_shapes)
     print(detections)
-
-
-
-    # def postprocess(self, preds, img, orig_imgs):
-    #     """Post-processes predictions and returns a list of Results objects."""
-    #     preds = ops.non_max_suppression(preds,
-    #                                     self.args.conf,
-    #                                     self.args.iou,
-    #                                     agnostic=self.args.agnostic_nms,
-    #                                     max_det=self.args.max_det,
-    #                                     classes=self.args.classes)
-
-    #     if not isinstance(orig_imgs, list):  # input images are a torch.Tensor, not a list
-    #         orig_imgs = ops.convert_torch2numpy_batch(orig_imgs)
-
-    #     results = []
-    #     for i, pred in enumerate(preds):
-    #         orig_img = orig_imgs[i]
-    #         pred[:, :4] = ops.scale_boxes(img.shape[2:], pred[:, :4], orig_img.shape)
-    #         img_path = self.batch[0][i]
-    #         results.append(Results(orig_img, path=img_path, names=self.model.names, boxes=pred))
-    #     return results
-
-
-    # def preprocess(self, im):
-    #     """Prepares input image before inference.
-
-    #     Args:
-    #         im (torch.Tensor | List(np.ndarray)): BCHW for tensor, [(HWC) x B] for list.
-    #     """
-    #     not_tensor = not isinstance(im, torch.Tensor)
-    #     if not_tensor:
-    #         im = np.stack(self.pre_transform(im))
-    #         im = im[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
-    #         im = np.ascontiguousarray(im)  # contiguous
-    #         im = torch.from_numpy(im)
-
-    #     im = im.to(self.device)
-    #     im = im.half() if self.model.fp16 else im.float()  # uint8 to fp16/32
-    #     if not_tensor:
-    #         im /= 255  # 0 - 255 to 0.0 - 1.0
-    #     return im
