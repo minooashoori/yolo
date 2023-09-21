@@ -1,49 +1,3 @@
-###########################################################################################
-#                                                                                         #
-# This sample shows how to evaluate object detections applying the following metrics:     #
-#  * Precision x Recall curve       ---->       used by VOC PASCAL 2012)                  #
-#  * Average Precision (AP)         ---->       used by VOC PASCAL 2012)                  #
-#                                                                                         #
-# Developed by: Rafael Padilla (rafael.padilla@smt.ufrj.br)                               #
-#        SMT - Signal Multimedia and Telecommunications Lab                               #
-#        COPPE - Universidade Federal do Rio de Janeiro                                   #
-#        Last modification: Feb 12th 2021                                                 #
-###########################################################################################
-
-####################################################################################################
-#                                                                                                  #
-# THE CURRENT VERSION WAS UPDATED WITH A VISUAL INTERFACE, INCLUDING MORE METRICS AND SUPPORTING   #
-# OTHER FILE FORMATS. PLEASE ACCESS IT ACCESSED AT:                                                #
-#                                                                                                  #
-# https://github.com/rafaelpadilla/review_object_detection_metrics                                 #
-#                                                                                                  #
-# @Article{electronics10030279,                                                                    #
-#     author         = {Padilla, Rafael and Passos, Wesley L. and Dias, Thadeu L. B. and Netto,    #
-#                       Sergio L. and da Silva, Eduardo A. B.},                                    #
-#     title          = {A Comparative Analysis of Object Detection Metrics with a Companion        #
-#                       Open-Source Toolkit},                                                      #
-#     journal        = {Electronics},                                                              #
-#     volume         = {10},                                                                       #
-#     year           = {2021},                                                                     #
-#     number         = {3},                                                                        #
-#     article-number = {279},                                                                      #
-#     url            = {https://www.mdpi.com/2079-9292/10/3/279},                                  #
-#     issn           = {2079-9292},                                                                #
-#     doi            = {10.3390/electronics10030279}, }                                            #
-####################################################################################################
-
-####################################################################################################
-# If you use this project, please consider citing:                                                 #
-#                                                                                                  #
-# @INPROCEEDINGS {padillaCITE2020,                                                                 #
-#    author    = {R. {Padilla} and S. L. {Netto} and E. A. B. {da Silva}},                         #
-#    title     = {A Survey on Performance Metrics for Object-Detection Algorithms},                #
-#    booktitle = {2020 International Conference on Systems, Signals and Image Processing (IWSSIP)},#
-#    year      = {2020},                                                                           #
-#    pages     = {237-242},}                                                                       #
-#                                                                                                  #
-# This work is published at: https://github.com/rafaelpadilla/Object-Detection-Metrics             #
-####################################################################################################
 
 import argparse
 import glob
@@ -57,6 +11,7 @@ from BoundingBoxes import BoundingBoxes
 from Evaluator import *
 from utils import BBFormat
 from PrecisionRecallEvaluator import PrecisionRecallEvaluator
+import yaml
 
 
 # Validate formats
@@ -328,16 +283,7 @@ if len(errors) != 0:
 
 # Check if path to save results already exists and is not empty
 if os.path.isdir(savePath) and os.listdir(savePath):
-    key_pressed = ''
-    while key_pressed.upper() not in ['Y', 'N']:
-        print(f'Folder {savePath} already exists and may contain important results.\n')
-        print(f'Enter \'Y\' to continue. WARNING: THIS WILL REMOVE ALL THE CONTENTS OF THE FOLDER!')
-        print(f'Or enter \'N\' to abort and choose another folder to save the results.')
-        key_pressed = input('')
-
-    if key_pressed.upper() == 'N':
-        print('Process canceled')
-        sys.exit()
+    print(f'Folder {savePath} already exists and may contain important results.\n')
 
 # Clear folder and save results
 shutil.rmtree(savePath, ignore_errors=True)
@@ -386,14 +332,19 @@ detections = evaluator.PlotPrecisionRecallCurve(
     savePath=savePath,
     showGraphic=showPlot)
 
+# we will also save the results in a yaml file for further analysis
+results = {}
+
 f = open(os.path.join(savePath, 'results.txt'), 'w')
 f.write('Object Detection Metrics\n')
-f.write('https://github.com/rafaelpadilla/Object-Detection-Metrics\n\n\n')
 f.write('Average Precision (AP), Precision and Recall per class:')
+
+
 
 # each detection is a class
 for metricsPerClass in detections:
 
+    results_per_class = {}
     # Get metric values per each class
     cl = metricsPerClass['class']
     ap = metricsPerClass['AP']
@@ -402,6 +353,14 @@ for metricsPerClass in detections:
     totalPositives = metricsPerClass['total positives']
     total_TP = metricsPerClass['total TP']
     total_FP = metricsPerClass['total FP']
+    confs = metricsPerClass['confs']
+
+    results_per_class["precision"] = [float(p) for p in precision]
+    results_per_class["recall"] = [float(r) for r in recall]
+    results_per_class["total positives"] = float(totalPositives)
+    results_per_class["total TP"] = float(total_TP)
+    results_per_class["total FP"] = float(total_FP)
+    results_per_class["confs"] = [float(c) for c in confs]
 
     if totalPositives > 0:
         validClasses = validClasses + 1
@@ -415,16 +374,29 @@ for metricsPerClass in detections:
         f.write('\nAP: %s' % ap_str)
         f.write('\nPrecision: %s' % prec)
         f.write('\nRecall: %s' % rec)
+        
+        results_per_class["ap"] = float(ap)
+    results[cl] = results_per_class
 
 mAP = acc_AP / validClasses
 mAP_str = "{0:.2f}%".format(mAP * 100)
 print('mAP: %s' % mAP_str)
 f.write('\n\n\nmAP: %s' % mAP_str)
+results["mAP"] = float(mAP)
 
 
-prec_recall = prec_recall_evaluator.getPrecisionRecall(
+prec_recall_res = prec_recall_evaluator.getPrecisionRecall(
     conf,
     allBoundingBoxes,
     iouThreshold,
 )
-print(prec_recall)
+print(prec_recall_res)
+
+for res in  prec_recall_res:
+    results[res["class"]][f"prec@conf{conf}@iou{iouThreshold}"] = float(res["precision"])
+    results[res["class"]][f"recall@conf{conf}@iou{iouThreshold}"] = float(res["recall"])
+    results[res["class"]]["conf"] = conf
+    results[res["class"]]["iou"] = iouThreshold
+#save results as a yaml file
+with open(os.path.join(savePath, 'results.yaml'), 'w') as f:
+    yaml.dump(results, f)

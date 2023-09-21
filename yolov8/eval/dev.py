@@ -1,45 +1,85 @@
 import os
-from ultralytics import YOLO, settings
-import glob
+from ultralytics import YOLO
 from PIL import Image
+import glob
 from utils.boxes import transf_any_box
+import argparse
+from tqdm import tqdm
 
-IMG_FOLDER = "/home/ec2-user/dev/data/logo05/yolo/images/test"
-OUTPUT_FOLDER = "/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo"
-
-# train51 - best so far
-# train61 - epoch 27 - 0.1
-# model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train61/weights/epoch27.pt') #
-
-model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train62/weights/epoch9.pt') #
-
-
-# results = model(IMG_FOLDER, stream=True, conf=0.1)
-results = model("/home/ec2-user/dev/ctx-logoface-detector/metrics/Screenshot 2023-09-13 at 10.36.29.png", stream=True, conf=0.1)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
-
-for res in results:
-    print(res.boxes)
-    im_array = res.plot()  # plot a BGR numpy array of predictions
-    im = Image.fromarray(im_array[..., ::-1])  # RGB PIL image
-    # im.show()  # show image
-    im.save('/home/ec2-user/dev/ctx-logoface-detector/results.jpg')  # save image
-
-    # cls = res.boxes.cls.to("cpu").tolist()
-    # conf = res.boxes.conf.to("cpu").tolist()
-    # boxes_xywh = res.boxes.xywh.to("cpu").tolist()
-    # content = ""
-    # for c, b, xywh in zip(cls, conf, boxes_xywh):
-    #     if c == 1:
-
-    #         xywh = transf_any_box(xywh, "yolo", "xywh")
-    #         xywh = [int(round(x)) for x in xywh]
-    #         content += f"{str(int(c))} {round(b,2)} {xywh[0]} {xywh[1]} {xywh[2]} {xywh[3]}\n"
-
-    # # get name without extension from the path
-    # filename = os.path.splitext(os.path.basename(res.path))[0]
-
-    # with open(os.path.join(OUTPUT_FOLDER, filename+".txt"), "w") as f:
-    #     f.write(content)
+parser = argparse.ArgumentParser()
+parser.add_argument("--model_path", type=str, default="/home/ec2-user/dev/yolo/runs/detect/train69/weights/last.pt")
+parser.add_argument("--model", type=str, default="train51")
+parser.add_argument("--epoch", type=int, default=59)
+parser.add_argument("--conf", type=float, default=0.01)
+parser.add_argument("--img_folder", type=str, default="/home/ec2-user/dev/data/logo05/yolo/images/test")
+# parser.add_argument("--img_folder", type=str, default="/home/ec2-user/dev/data/widerface/unzip/val")
+parser.add_argument("--output_folder", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo_small")
+# parser.add_argument("--output_folder", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small")
+parser.add_argument("--runs_folder", type=str, default="/home/ec2-user/dev/yolo/runs/detect")
+parser.add_argument("--c", type=int, default=1)
+parser.add_argument("--show", type=bool, default=True)
+args = parser.parse_args()
 
 
+def inference(args):
+    if not args.model_path:
+        model_path = f"{args.runs_folder}/{args.model}/weights/epoch{args.epoch}.pt"
+    else:
+        model_path = args.model_path
+    model = YOLO(model_path)
+    results = model(args.img_folder, stream=True, conf=args.conf, verbose=False, half=True)
+    os.makedirs(args.output_folder, exist_ok=True)
+    # get the number of images: can be jpg or png
+    files = glob.glob(os.path.join(args.img_folder, "*.jpg")) + glob.glob(os.path.join(args.img_folder, "*.png"))
+    n_files = len(files)
+
+    print(f"Running inference on {args.img_folder} containing {n_files} files for class {args.c}...")
+    pil_images = []
+    count = 0
+    pbar = tqdm(total=n_files, unit="images")
+    for res in results:
+        if args.show:
+            if len(pil_images) < 50:
+                im_array = res.plot()  # plot a BGR numpy array of predictions
+                im = Image.fromarray(im_array[..., ::-1])  # RGB PIL image
+                pil_images.append(im)
+
+        cl = res.boxes.cls.to("cpu").tolist()
+        conf = res.boxes.conf.to("cpu").tolist()
+        boxes_xywh = res.boxes.xywh.to("cpu").tolist()
+        content = ""
+        for c, b, xywh in zip(cl, conf, boxes_xywh):
+            if c == args.c:
+                xywh = transf_any_box(xywh, "yolo", "xywh")
+                xywh = [int(round(x)) for x in xywh]
+                content += f"{str(int(c))} {round(b,2)} {xywh[0]} {xywh[1]} {xywh[2]} {xywh[3]}\n"
+
+        # get name without extension from the path
+        filename = os.path.splitext(os.path.basename(res.path))[0]
+
+        with open(os.path.join(args.output_folder, filename+".txt"), "w") as f:
+            f.write(content)
+        count += 1
+        pbar.update(1)
+
+
+    if pil_images:
+        # create a grid
+        grid_size = 2048
+        cell_size =  grid_size // 5
+        grid = Image.new("RGB", (grid_size, grid_size), "white")
+        for row in range(5):
+            for col in range(5):
+                img_idx = row * 5 + col
+                if img_idx < len(pil_images):
+                    img = pil_images[img_idx]
+                    img = img.resize((cell_size, cell_size))
+                    grid.paste(img, (col * cell_size, row * cell_size))
+        grid.save(f"pred.jpg")
+    print(f"Saved {count} inference files to {args.output_folder}")
+
+def main():
+    inference(args)
+
+if __name__ == "__main__":
+    main()
