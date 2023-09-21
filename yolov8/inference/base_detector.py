@@ -131,7 +131,7 @@ class Detector:
         if original_shape:
             detections = self._transform_with_shape(
                 detections, frame_nums, original_shape)
-        
+
         detections = self._truncate_bounding_boxes(detections)
 
         frame_nums, detections, scores, labels = self._filter_with_min_size(

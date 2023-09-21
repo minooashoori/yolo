@@ -52,9 +52,9 @@ class LogoFaceDetector:
 if __name__ == "__main__":
     detect = LogoFaceDetector()
     # detect.load("/home/ec2-user/dev/yolo/runs/detect/train51/weights/epoch59.pt")
-    detect.load("/home/ec2-user/dev/yolo/runs/detect/train69/weights/last.engine")
-    # detect.export(format="torchscript", half=True, dynamic=False, batch=32, device="0", simplify=True)
+    detect.load("/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.pt")
+    detect.export(format="torchscript", half=True, dynamic=False, batch=32, device="0", simplify=True)
     # detect.export(format="onnx", half=True, dynamic=False, batch=32, device="0", simplify=True)
     # detect.export(format="engine", half=True, dynamic=False, batch=32, device="0", simplify=True)
-    res = detect.predict("/home/ec2-user/dev/ctx-logoface-detector/metrics/Screenshot 2023-09-14 at 10.37.23.png")
+    # res = detect.predict("/home/ec2-user/dev/ctx-logoface-detector/metrics/Screenshot 2023-09-14 at 10.37.23.png")
     # print(res)

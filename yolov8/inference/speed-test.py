@@ -7,6 +7,10 @@ from pathlib import Path
 import json
 import subprocess
 from collections import OrderedDict, namedtuple
+from nms import non_max_suppression
+from PIL import Image
+
+torch.set_printoptions(sci_mode=False)
 
 class Detector(nn.Module):
     """
@@ -147,6 +151,7 @@ class Detector(nn.Module):
             im = im.half()  # to FP16
         if self.jit:  # TorchScript
             y = self.model(im)
+            y_ = non_max_suppression(y, conf_thres=0.25, iou_thres=0.45, max_det=300)
         elif self.onnx:  # ONNX Runtime
             im = im.cpu().numpy()  # torch to numpy
             y = self.session.run(self.output_names, {self.session.get_inputs()[0].name: im})
@@ -198,23 +203,31 @@ if __name__ == '__main__':
     # parser.add_argument('nb_workers', type=int)
     # args = parser.parse_args()
 
-    detector = Detector(weights="/home/ec2-user/dev/yolo/runs/detect/train69/weights/last.torchscript",
+    detector = Detector(weights="/models/yolov8s_half.torchscript",
                             device=torch.device('cuda:0'),
                             fp16=True)
-    batchsize = 32
+    batchsize = 64
     nb_iter_per_worker = 250
     nb_workers = 2
     total_imgs = nb_workers*nb_iter_per_worker*batchsize
 
-    test_img = np.array(np.random.uniform(0,255, [batchsize, 3, 416,416]), dtype=np.float32)
+    # test_img = np.array(np.random.uniform(0,255, [batchsize, 3, 416,416]), dtype=np.float32)
+    img = Image.open("/models/img.jpg")
+    img = np.array(img)
+    # print(img)
+    img = [img for _ in range(batchsize)]
+    test_img = np.stack(img, axis=0)
+    
+    
     # send it to torch
-    test_img = torch.from_numpy(test_img).half().cuda()
+    test_img = torch.from_numpy(test_img).permute(0, 3, 1, 2).contiguous().half().cuda()
+    test_img = test_img/255.0
 
     print("Model First batch...")
     for _ in range(2):
         out = detector(test_img)
 
-    print(out.shape)
+    # print(out.shape)
     def worker_thread():
         for i in range(nb_iter_per_worker):
             detector(test_img)

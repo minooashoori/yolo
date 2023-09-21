@@ -15,13 +15,12 @@ class Detector:
         model_path: str,
         confidence_thresholds: dict = None,
         detection_min_size_percentage: int = 0.1,
-        batch_size: int = None,
-        process_gpu_memory_fraction: float = 1.0,
+        batch_size: int = -1,
         fp16: bool = True,
         device: str = "cuda:0",
     ):
 
-        class_map = {134533: 0, 90020: 1}
+        self.class_map = {134533: 0, 90020: 1}
 
         # make sure the suffix is .torchscript
         jit = Path(model_path).suffix[1:] == "torchscript"
@@ -29,25 +28,21 @@ class Detector:
             raise NotImplementedError(f'Model path suffix must be .torchscript got {model_path}')
 
         # check confidence thresholds
-        conf_thres_classes = self._check_thresholds(confidence_thresholds, class_map)
+        self.conf_thres_classes = self._check_thresholds(confidence_thresholds, class_map)
 
-        model, metadata = None, None
+        self.model, self.metadata = None, None
 
-        device = torch.device(device)
-        cuda = torch.cuda.is_available() and device.type != 'cpu'
-        if not cuda:
-            cuda = False
+        self.device = torch.device(device)
+        self.cuda = torch.cuda.is_available() and self.device.type != 'cpu'
+        if not self.cuda:
+            self.cuda = False
 
-        model, metadata = self._load_jit(model_path, device, fp16)
+        self.model, self.metadata = self._load_jit(model_path, device, fp16)
+        self.batch_size = batch_size 
+        self.imgsz = 416
+        self.names = metadata['names']
 
-        batch_size = batch_size or metadata['batch']
-        imgsz = 416
-        names = metadata['names']
-
-        detection_min_size_percentage = detection_min_size_percentage or 0.1
-        process_gpu_memory_fraction = process_gpu_memory_fraction or 1.0
-
-        self.__dict__.update(locals())  # assign all variables to self
+        self.detection_min_size_percentage = detection_min_size_percentage
 
         self.warmup() # warmup the model
 
@@ -66,7 +61,7 @@ class Detector:
     @staticmethod
     def _check_thresholds(conf_thrs: dict, class_map: dict) -> None:
 
-        conf_thrs = conf_thrs or {134533: 0.3, 90020: 0.1}
+        conf_thrs = conf_thrs or {134533: 0.2, 90020: 0.1}
 
         conf_thrs = {int(k): v for k, v in conf_thrs.items()}
         # confidence thresholds and categories map must have the same keys
@@ -99,8 +94,9 @@ class Detector:
             original_shape: list of original image shapes
         """
 
-        ims = self._preprocess(ims)
-        res = self.predict(ims)
+        ims, n_ims = self._preprocess(ims)
+        preds = self.predict(ims)
+        res = self._postprocess(preds, original_shapes, n_ims)
         return res
 
 
@@ -118,7 +114,7 @@ class Detector:
 
         n_ims = len(ims)
 
-        if self.batch_size:
+        if self.batch_size and n_ims > self.batch_size:
             n_ims_add = self.batch_size - n_ims
             black_im = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.float32) # HWC
             ims += [black_im for _ in range(n_ims_add)] # [B x [HWC]]
@@ -127,16 +123,102 @@ class Detector:
         ims = torch.from_numpy(np.stack(ims)).permute(0, 3, 1, 2).contiguous() # BCHW
         ims = ims.to(self.device)
         ims = ims.half() if self.fp16 else ims.float() # uint8 to fp16/32
-        ims /= 255 # 0 - 255 to 0.0 - 1.0
-        return ims
+        ims /= 255.0 # 0 - 255 to 0.0 - 1.0
+        return ims, n_ims
 
 
-    def _postprocess(self, preds, orig_shapes):
+    def _filter(self,
+                select: torch.Tensor,
+                frames: torch.Tensor,
+                boxes:torch.Tensor,
+                scores: torch.Tensor,
+                labels: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 
-        detections = []
-        detections = non_max_suppression(preds, 
-                                        conf_thres = float(min(self.conf_thres_classes)),
-                                        conf_thres_classes=self.conf_thres_classes)
+        return frames[select], boxes[select], scores[select], labels[select]
+
+
+
+    def _postprocess(self, preds, orig_shapes, n_imgs):
+
+        frames, boxes, scores, labels = non_max_suppression(preds, conf_thres_classes=self.conf_thres_classes)
+
+        print(f"frames: {frames}")
+        print(f"scores: {scores}")
+        
+        # remove detections that are not for the original images
+        frames, boxes, scores, labels = self._filter(frames < 1, frames, boxes, scores, labels)
+        print("after filter")
+        print(f"frames: {frames}")
+        print(f"scores: {scores}")
+
+
+        # only run if we got boxes
+        if boxes.numel() > 0:
+
+            boxes = self._normalize_boxes(boxes)
+
+            if orig_shapes:
+                boxes = self._reshape_boxes(boxes, frames, orig_shapes)
+
+            frames, boxes, scores, labels = self._ensure_min_size(frames, boxes, scores, labels)
+
+    def _ensure_min_size(self, frames, boxes, scores, labels) -> torch.Tensor:
+
+        """
+        Ensures that the already normalized boxes are at least % of the image size,
+        """
+        # if boxes are not of minimum size, remove them from boxes and remove the corresponding scores and labels and frames
+
+
+        box_size_select = torch.logical_and((boxes[:, 2] - boxes[:, 0]) > self.detection_min_size_percentage,
+                                            (boxes[:, 3] - boxes[:, 1]) > self.detection_min_size_percentage,
+                                            )
+
+        # filter the tensors
+        boxes = boxes[box_size_select]
+        scores = scores[box_size_select]
+        labels = labels[box_size_select]
+        frames = frames[box_size_select]
+
+        return frames, boxes, scores, labels
+
+    def _normalize_boxes(self, boxes: torch.Tensor) -> torch.Tensor:
+
+            """
+            Normalizes boxes between [0,1].
+            """
+
+            boxes /= self.imgsz
+            # clamp boxes between 0 and 1
+            boxes = boxes.clamp(0.0, 1.0)
+            return boxes
+
+
+    def _reshape_boxes(self, boxes: torch.Tensor, frames: torch.Tensor, orig_shapes: List[List[int]]) -> torch.Tensor:
+
+        """
+        Transforms the detections according to the frame original shape,
+        and returns detections between [0,1].
+        """
+
+        if orig_shapes is None:
+            return detections
+
+        orig_shapes = torch.tensor(orig_shapes).to(frames.device)
+        orig_shapes = orig_shapes[frames]
+
+
+        resize_ratio = torch.min(self.imgsz / orig_shapes, dim=-1).values
+        delta = (self.imgsz - (orig_shapes * resize_ratio.unsqueeze(1))) / 2
+        abs_boxes = boxes * self.imgsz
+        boxes[:, 0] = ((abs_boxes[:, 0] - delta[:, 1]) / resize_ratio) / orig_shapes[:, 1]
+        boxes[:, 1] = ((abs_boxes[:, 1] - delta[:, 0]) / resize_ratio) / orig_shapes[:, 0]
+        boxes[:, 2] = ((abs_boxes[:, 2] - delta[:, 1]) / resize_ratio) / orig_shapes[:, 1]
+        boxes[:, 3] = ((abs_boxes[:, 3] - delta[:, 0]) / resize_ratio) / orig_shapes[:, 0]
+
+        # clamp boxes between 0 and 1
+        boxes = boxes.clamp(0.0, 1.0)
+        return boxes
 
 
 
@@ -155,11 +237,9 @@ class Detector:
         pass
 
 
-
-
 if __name__ == '__main__':
-    
-    detector = Detector(model_path="/home/ec2-user/dev/yolo/runs/detect/train69/weights/last.torchscript", batch_size=1)
+
+    detector = Detector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript", batch_size=3)
 
     # read an image from path and convert it to numpy
     img_path = "/home/ec2-user/dev/data/logo05fusion/yolo/images/val/000000053.jpg"
@@ -167,13 +247,10 @@ if __name__ == '__main__':
     img = Image.open(img_path)
     img = np.array(img)
     # print(img)
-    img = [img for _ in range(1)]
-    detections = detector.detect(img)
-    # print(detections[0, :, 0])
-    print(detections.shape)
-    non_max_suppression(detections, conf_thres_classes=(0.8, 0.2))
-    
-    
+    img = [img for _ in range(3)]
+    orig_shapes = [[400, 400], [800, 800], [600, 600]]
+    detector.detect(img, orig_shapes)
+
 
 
     # def postprocess(self, preds, img, orig_imgs):

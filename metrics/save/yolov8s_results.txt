@@ -1,8 +1,22 @@
 iou thres: 0.45
-logo:
-- prod (thres: 0.35): [{'class': '1', 'precision': 0.59, 'recall': 0.72}], AP: 63.94% (1)
-- yolov8s (thres: 0.25): [{'class': '1', 'precision': 0.61, 'recall': 0.73}], AP: 71.47% (1)
 
-face:
-- prod (thres: 0.4): [{'class': '0', 'precision': 0.83, 'recall': 0.46}], AP: 44.66% (0)
-- yolov8s (thres: 0.05): [{'class': '0', 'precision': 0.8, 'recall': 0.44}], AP: 46.34% (0)
+prod
+logo (thres: 0.35): [{'class': '1', 'precision': 0.59, 'recall': 0.72}], AP: 63.94% (1)
+face (thres: 0.4): [{'class': '0', 'precision': 0.83, 'recall': 0.46}], AP: 44.66% (0)
+
+train69 (yolov8s)
+
+logo: (thres: 0.25): 
+[{'class': '1', 'precision': 0.61, 'recall': 0.73}], AP: 71.47% (1)
+face: (thres: 0.05): 
+[{'class': '0', 'precision': 0.8, 'recall': 0.44}], AP: 46.34% (0)
+
+train74 (yolov8s)
+
+logo:  (thres 0.1):
+mAP: 68.94%
+[{'class': '1', 'precision': 0.6, 'recall': 0.72}]
+
+face: (thres 0.2)
+mAP: 48.61%
+[{'class': '0', 'precision': 0.82, 'recall': 0.44}]
