@@ -4,10 +4,12 @@ from typing import List, Tuple, Union
 
 import numpy as np
 import torch
+import pprint
 from nms import non_max_suppression
 
 # from compute_common.logger import logger
 torch.set_printoptions(sci_mode=False)
+pp = pprint.PrettyPrinter(indent=4)
 
 class FusionFaceLogoDetector:
 
@@ -58,6 +60,7 @@ class FusionFaceLogoDetector:
 
         # load the model and metadata
         self.model, self.metadata = self._load_jit(model_path, self.device, self.fp16)
+        # pp.pprint(self.metadata)
 
         # check the batch size  - batch size cannot be 0 or lower than -1
         self.batch_size = batch_size if batch_size > 0 or batch_size == -1 else 1
@@ -436,7 +439,7 @@ class FusionFaceLogoDetector:
 if __name__ == '__main__':
 
     detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript",
-                        conf_thrs={"logo": 0.8, "face": 0.1}, device="cpu")
+                        conf_thrs={"logo": 0.8, "face": 0.1}, device="cuda")
 
     # read an image from path and convert it to numpy
     img_path = "/home/ec2-user/dev/data/logo05fusion/yolo/images/val/000000053.jpg"
@@ -447,4 +450,4 @@ if __name__ == '__main__':
     img = [img for _ in range(3)]
     orig_shapes = [[400, 400], [800, 800], [600, 600]]
     detections = detector.detect(img, orig_shapes)
-    print(detections)
+    pp.pprint(detections)
