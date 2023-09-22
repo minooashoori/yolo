@@ -15,8 +15,19 @@ class FusionFaceLogoDetector:
     Detector class for object detection of faces and logos using a TorchScript model.
 
     Args:
+        model_path (str): The path to the TorchScript model file.
+        conf_thrs (Union[dict, float]): Confidence thresholds for face and logo detection.
+        box_min_perc (float): The minimum percentage of image size for a detected bounding box.
+        batch_size (int): The batch size for inference. Set to -1 for dynamic batch size.
+        fp16 (bool): Whether to use 16-bit floating-point precision (half-precision) for inference.
+        device (str): The target torch device where the model should be loaded ("cuda:0" for GPU or "cpu" for CPU).
+        max_det (int): The maximum number of boxes to keep after NMS.
 
-
+    Notes:
+        - This class serves as a detector for faces and logos using a TorchScript model.
+        - It provides methods for detecting objects in images, model warm-up, and other utility functions.
+        - Confidence thresholds can be specified as a float or a dictionary with keys 134533/face and 90020/logo.
+        - The batch size can be set to -1 for dynamic batch size based on the number of input images. Careful with this option as it can lead to out of memory errors.
     """
 
     def __init__(
@@ -142,7 +153,7 @@ class FusionFaceLogoDetector:
         # logger.info("Warmup finished.")
         print("Warmup finished.")
 
-    def detect(self, ims: List[np.ndarray], original_shapes: List[List[int]] = None) -> List[List[Union[List[float], str, float]]]:
+    def detect(self, ims: List[np.ndarray], original_shapes: List[List[int]] = None) -> List[List[Union[List[float], bytes, float]]]:
         """
         Detect objects in a list of images.
 
@@ -151,7 +162,7 @@ class FusionFaceLogoDetector:
             original_shapes (List[List[int]], optional): A list of original image shapes in the format [H, W].
 
         Returns:
-            List[List[Union[List[float], str, float]]]: A list of detection results for each image.
+            List[List[Union[List[float], bytes, float]]]: A list of detection results for each image.
                 Each inner list contains information for one detection, including the bounding box coordinates in the xyxy format,
                 class label (as a string encoded in UTF-8), and confidence score.
 
@@ -248,7 +259,7 @@ class FusionFaceLogoDetector:
             orig_shapes (List[List[int]], optional): A list of original image shapes with dimensions [H, W].
 
         Returns:
-            List[List[Union[List[float], str, float]]]: A list of organized detection results for each image.
+            List[List[Union[List[float], bytes, float]]]: A list of organized detection results for each image.
                 Each inner list contains information for one detection, including the bounding box coordinates,
                 class label (as a string encoded in UTF-8), and confidence score.
 
@@ -285,7 +296,7 @@ class FusionFaceLogoDetector:
                         boxes: torch.Tensor,
                         scores: torch.Tensor,
                         labels: torch.Tensor,
-                        n_ims: int) -> List[List[Union[List[float], str, float]]]:
+                        n_ims: int) -> List[List[Union[List[float], bytes, float]]]:
         """
         Stitch together and organize detection results for multiple images.
 
@@ -297,7 +308,7 @@ class FusionFaceLogoDetector:
             n_ims (int): The number of images in the batch.
 
         Returns:
-            List[List[Union[List[float], str, float]]]: A list of lists containing detection results for each image.
+            List[List[Union[List[float], bytes, float]]]: A list of lists containing detection results for each image.
                 Each inner list contains information for one detection, including the bounding box coordinates,
                 class label (as a string encoded in UTF-8), and confidence score.
         """
@@ -314,7 +325,6 @@ class FusionFaceLogoDetector:
             res  = []
             for box, label, score in zip(boxes[select].tolist(), labels[select], scores[select]):
                 res.append([box, str(self.ids[label]).encode("utf-8"), float(score)])
-            
             results.append(res)
         return results
 
