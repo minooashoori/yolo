@@ -5,22 +5,32 @@ import json
 import numpy as np
 from typing import List, Tuple, Union
 from nms import non_max_suppression
+from collections import OrderedDict
 # from compute_common.logger import logger
 torch.set_printoptions(sci_mode=False)
 
 class Detector:
+    
+    """
+    Detector class for object detection of faces and logos using a TorchScript model.
+
+    Args:
+
+
+    """
 
     def __init__(
         self,
         model_path: str,
-        confidence_thresholds: dict = None,
-        detection_min_size_percentage: int = 0.04,
+        conf_thrs: Union[dict, float] = None,
+        box_min_perc: float = 0.04,
         batch_size: int = -1,
         fp16: bool = True,
         device: str = "cuda:0",
     ):
 
-        self.class_map = {134533: 0, 90020: 1}
+        self.ids = {0: "134533", 1: "90020"}
+        self.names = {0: "face", 1: "logo"}
 
         # make sure the suffix is .torchscript
         jit = Path(model_path).suffix[1:] == "torchscript"
@@ -28,7 +38,7 @@ class Detector:
             raise NotImplementedError(f'Model path suffix must be .torchscript got {model_path}')
 
         # check confidence thresholds
-        self.conf_thres_classes = self._check_thresholds(confidence_thresholds, self.class_map)
+        self.conf_thrs = self._check_thresholds(conf_thrs)
 
         self.model, self.metadata = None, None
         self.fp16 = fp16
@@ -36,16 +46,14 @@ class Detector:
         self.device = torch.device(device)
         self.cuda = torch.cuda.is_available() and self.device.type != 'cpu'
         if not self.cuda:
-            self.cuda = False
+            self.device = torch.device('cpu')
 
         self.model, self.metadata = self._load_jit(model_path, self.device, self.fp16)
         self.batch_size = batch_size
 
-
         self.imgsz = 416
-        self.names = self.metadata['names']
 
-        self.detection_min_size_percentage = detection_min_size_percentage
+        self.box_min_perc = box_min_perc
 
         self.warmup() # warmup the model
 
@@ -77,23 +85,40 @@ class Detector:
         return model, metadata
 
     @staticmethod
-    def _check_thresholds(conf_thrs: dict, class_map: dict) -> List[float]:
+    def _check_thresholds(conf_thrs: Union[dict, float]) -> List[float]:
+        """
+        Check and transform confidence thresholds.
 
-        conf_thrs = conf_thrs or {134533: 0.2, 90020: 0.1}
+        Args:
+            conf_thrs (Union[dict, float]): Confidence thresholds can have 3 formats:
+                1. None
+                2. float
+                3. Dictionary with keys 134533 and 90020, "134533" and "90020" or face and logo
+        Returns:
+            List[float]: List of confidence threshold values in the order [face, logo].
+        Raises:
+            NotImplementedError: If the input format is not supported.
+        """
+        conf_thrs = conf_thrs if conf_thrs is not None else OrderedDict({134533: 0.2, 90020: 0.1})
 
-        conf_thrs = {int(k): v for k, v in conf_thrs.items()}
-        # confidence thresholds and categories map must have the same keys
-        if set(conf_thrs.keys()) != set(class_map.keys()):
-            raise ValueError(
-                f"Confidence thresholds must have keys: 134533 (face) and 90020 (logo) but got {conf_thrs.keys()}"
-            )
-        # logger.info(f"Confidence thresholds: {conf_thrs}")
-        print(f"Confidence thresholds: {conf_thrs}")
-        # sort the conf thresholds by the values of class_map and return a list
-        conf_thrs = [conf_thrs[k] for k in sorted(conf_thrs.keys(), key=lambda x: class_map[x])]
-        print(f"Confidence thresholds: {conf_thrs}")
+        # if it's a float, then just output the list of floats
+        if isinstance(conf_thrs, float):
+            return [conf_thrs for _ in range(2)]
 
-        return conf_thrs
+        elif isinstance(conf_thrs, dict):
+            # if the keys are face and logo, convert them to 134533 and 90020
+            if set(conf_thrs.keys()) == set(["face", "logo"]):
+                conf_thrs = OrderedDict({134533: conf_thrs["face"], 90020: conf_thrs["logo"]})
+            # cast the keys to int
+            conf_thrs = {int(k): v for k, v in conf_thrs.items()}
+            # and now we make sure that we map the keys to the right ids
+            conf_thrs = OrderedDict({134533: conf_thrs[134533], 90020: conf_thrs[90020]})
+        else:
+            raise NotImplementedError(f"Confidence thresholds must be either a float, a dict or None, got {type(conf_thrs)}")
+
+        # extract the list of thresholds
+        return list(conf_thrs.values())
+
 
     def warmup(self) -> None:
         """
@@ -178,7 +203,7 @@ class Detector:
 
     def _postprocess(self, preds, n_ims, orig_shapes=None):
 
-        frames, boxes, scores, labels = non_max_suppression(preds, conf_thres_classes=self.conf_thres_classes)
+        frames, boxes, scores, labels = non_max_suppression(preds, conf_thres_classes=self.conf_thrs)
 
         # remove detections that are not for the original images
         frames, boxes, scores, labels = self._filter(frames < n_ims, frames, boxes, scores, labels)
@@ -228,8 +253,8 @@ class Detector:
         # if boxes are not of minimum size, remove them from boxes and remove the corresponding scores and labels and frames
 
 
-        box_size_select = torch.logical_and((boxes[:, 2] - boxes[:, 0]) > self.detection_min_size_percentage,
-                                            (boxes[:, 3] - boxes[:, 1]) > self.detection_min_size_percentage,
+        box_size_select = torch.logical_and((boxes[:, 2] - boxes[:, 0]) > self.box_min_perc,
+                                            (boxes[:, 3] - boxes[:, 1]) > self.box_min_perc,
                                             )
 
         # filter the tensors
