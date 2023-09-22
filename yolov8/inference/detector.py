@@ -36,7 +36,7 @@ class FusionFaceLogoDetector:
         self,
         model_path: str,
         conf_thrs: Union[dict, float] = None,
-        box_min_perc: float = 0.04,
+        box_min_perc: float = 0.01,
         batch_size: int = -1,
         fp16: bool = True,
         device: str = "cuda:0",
