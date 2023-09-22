@@ -284,14 +284,14 @@ def get_boxes_from_annotation(annotation):
     return boxes
 
 
-def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=False):
+def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=False, is_normalized=True):
 
     if boxes is None and annotation is None:
         raise ValueError("Either boxes or annotation must be provided.")
     if boxes is not None and annotation is not None:
         raise ValueError("Only one of boxes or annotation must be provided.")
 
-    assert box_type in ["yolo", "xywh"], "box_type must be one of: 'yolo', 'xywh'"
+    assert box_type in ["yolo", "xywh", "xyxy"], "box_type must be one of: 'yolo', 'xywh', 'xyxy'"
 
 
     if annotation is not None:
@@ -329,25 +329,30 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
     colors = {category: color for category, color in zip(categories, colors_list)}
     # we need to make the figure and the axes
     fig, ax = plt.subplots(1)
-    print(boxes)
+    
     ax.imshow(img)
     if len(boxes) > 0:
         for box_ in boxes:
+            
             category, box = box_[0], box_[1:]
             if box_type == "yolo":
                 # x1, y1, w, h = make_patch_format(box, width, height)
                 x1, y1, w, h = transf_any_box(box, input_type="yolo", output_type="xywh")
-                print(x1, y1, w, h)
+            elif box_type == "xyxy":
+                x1, y1, w, h = transf_any_box(box, input_type="xyxy", output_type="xywh")
             else:
                 x1, y1, w, h = box
             color = colors[category]
+            if is_normalized:
+                x1, y1, w, h = x1*width, y1*height, w*width, h*height
             # create a rectangle patch
             rect = patches.Rectangle((x1, y1), w, h, linewidth=2, edgecolor=color, facecolor='none')
-            # rect = patches.Rectangle((10, 10), 50, 50, linewidth=2, edgecolor=color, facecolor='none')
+
             # add the patch to the axes
             ax.add_patch(rect)
     if save:
         plt.savefig("boxes.jpg", bbox_inches='tight')
+        print(f"Figure exported to {os.path.join(os.getcwd(), 'boxes.jpg')} ")
     plt.show()
 
 

@@ -438,11 +438,10 @@ class FusionFaceLogoDetector:
 
 if __name__ == '__main__':
 
-    detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript",
-                        conf_thrs={"logo": 0.8, "face": 0.1}, device="cuda")
+    detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript", device="cuda", box_min_perc=0.0)
 
     # read an image from path and convert it to numpy
-    img_path = "/home/ec2-user/dev/data/logo05fusion/yolo/images/val/000000053.jpg"
+    img_path = "/home/ec2-user/dev/data/logo05fusion/yolo/images/val/000000054.jpg"
     from PIL import Image
     img = Image.open(img_path)
     img = np.array(img)
@@ -450,4 +449,17 @@ if __name__ == '__main__':
     img = [img for _ in range(3)]
     orig_shapes = [[400, 400], [800, 800], [600, 600]]
     detections = detector.detect(img, orig_shapes)
-    pp.pprint(detections)
+    # pp.pprint(detections)
+    
+    # visualize the boxes for one image
+    import matplotlib.pyplot as plt
+    import matplotlib.patches as patches
+    from utils.boxes import plot_boxes
+    
+    img = img[0]
+    boxes = detections[0]
+    only_boxes = [box[0] for box in boxes]
+    print(only_boxes)
+    
+    plot_boxes(img, boxes=only_boxes, box_type="xyxy", save=True)
+    
