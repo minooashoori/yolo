@@ -423,7 +423,7 @@ class FusionFaceLogoDetector:
 
     def _images_same_shapes(self, ims: List[np.ndarray]) -> bool:
         """
-        Check if all the images in a list have the same dimensions.
+        Check if all the images in a list have the same dimensions (imgsz, imgsz, 3)
 
         Args:
             ims (List[np.ndarray]): A list of NumPy arrays representing images.
@@ -432,7 +432,7 @@ class FusionFaceLogoDetector:
             bool: True if all images have the same dimensions, False otherwise.
         """
 
-        return len({im.shape[:2] for im in ims}) == 1
+        return all([im.shape == (self.imgsz, self.imgsz, 3) for im in ims])
 
 
 if __name__ == '__main__':

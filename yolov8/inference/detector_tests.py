@@ -75,9 +75,9 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
     def test_images_same_shapes(self):
         # Test _images_same_shapes method
         image_list = [
-            np.random.rand(224, 224, 3).astype(np.float32),
-            np.random.rand(224, 224, 3).astype(np.float32),
-            np.random.rand(224, 224, 3).astype(np.float32),
+            np.random.rand(416, 416, 3).astype(np.float32),
+            np.random.rand(416, 416, 3).astype(np.float32),
+            np.random.rand(416, 416, 3).astype(np.float32),
         ]
         self.assertTrue(self.detector._images_same_shapes(image_list))
 
