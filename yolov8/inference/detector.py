@@ -1,11 +1,11 @@
-import torch
-import torch.nn as nn
-from pathlib import Path
 import json
-import numpy as np
+from pathlib import Path
 from typing import List, Tuple, Union
+
+import numpy as np
+import torch
 from nms import non_max_suppression
-from collections import OrderedDict
+
 # from compute_common.logger import logger
 torch.set_printoptions(sci_mode=False)
 
@@ -54,9 +54,7 @@ class FusionFaceLogoDetector:
 
         # set the device and fp16
         self.device = torch.device(device if torch.cuda.is_available() and device != 'cpu' else 'cpu')
-        self.fp16 = fp16
-        if self.device.type == 'cpu' and self.fp16:
-            self.fp16  = False # cpu model runs on float
+        self.fp16 = fp16 if self.device.type != 'cpu' else False
 
         # load the model and metadata
         self.model, self.metadata = self._load_jit(model_path, self.device, self.fp16)
