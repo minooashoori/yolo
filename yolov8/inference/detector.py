@@ -139,7 +139,7 @@ class FusionFaceLogoDetector:
         # check if the values are valid
         if not all([0.0 <= t <= 1.0 for t in conf_thrs]):
             raise ValueError(f"Confidence threshold must be between 0.0 and 1.0, got {conf_thrs}")
-       
+
         # extract the list of thresholds
         return conf_thrs
 
