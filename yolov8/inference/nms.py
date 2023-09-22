@@ -34,7 +34,7 @@ def non_max_suppression(
         max_det=100,
         max_nms=30000,
         max_wh=7680,
-        conf_thres_classes=None,
+        conf_thres_cls=None,
 ):
     """
     Perform non-maximum suppression (NMS) on a set of boxes, with support for masks and multiple labels per box.
@@ -48,34 +48,39 @@ def non_max_suppression(
         iou_thres (float): The IoU threshold below which boxes will be filtered out during NMS.
             Valid values are between 0.0 and 1.0.
         max_det (int): The maximum number of boxes to keep after NMS.
-        max_time_img (float): The maximum time (seconds) for processing one image.
-        max_nms (int): The maximum number of boxes into torchvision.ops.nms().
-        max_wh (int): The maximum box width and height in pixels
-        conf_thres_classes (List[float]): A list of confidence thresholds for each class. If specified, the length must equal the number of classes.
-
+        max_nms (int): The maximum number of boxes passed into torchvision.ops.nms().
+        max_wh (int): The maximum box width and height in pixels, used to perform batched NMS.
+        conf_thres_cls (List[float]): A list of confidence thresholds for each class. If specified, the length must equal the number of classes.
 
     Returns:
-        # (List[torch.Tensor]): A list of length batch_size, where each element is a tensor of
-        #     shape (num_boxes, 6) containing the kept boxes, with columns
-        #     (x1, y1, x2, y2, confidence, class).
-        frames (torch.Tensor): A tensor with the shape (B x N) containing the frame number for each detection.
-        boxes (torch.Tensor): A tensor with the shape (B x N, 4) containing the coordinates of the kept boxes.
-        scores (torch.Tensor): A tensor with the shape (B x N) containing the scores of the predicted labels.
-        labels (torch.Tensor): A tensor with the shape (B x N) containing the predicted labels.
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: A tuple containing the following:
+        - torch.Tensor: A tensor of frame indices corresponding to each detection.
+        - torch.Tensor: A tensor containing the coordinates of the filtered bounding boxes in the format (x1, y1, x2, y2) where (x1, y1) is the top left corner and (x2, y2) is the bottom right corner.
+        - torch.Tensor: A tensor containing confidence scores for the detected boxes.
+        - torch.Tensor: A tensor containing class labels for the detected boxes.
+
+    Notes:
+        - This method performs NMS to filter out redundant detections based on confidence scores and IoU thresholds.
+        - It supports multi-class detection and can filter boxes based on per-class confidence thresholds.
+        - Excess boxes are sorted by confidence and limited to the specified maximum number.
+        - The results are organized by frame/image indices.
+
     """
 
-    # Checks
-    assert 0 <= conf_thres <= 1, f'Invalid Confidence threshold {conf_thres}, valid values are between 0.0 and 1.0'
-    assert 0 <= iou_thres <= 1, f'Invalid IoU {iou_thres}, valid values are between 0.0 and 1.0'
 
     bs = prediction.shape[0]  # batch size
     nc = (prediction.shape[1] - 4)  # number of classes
-    if conf_thres_classes:
-        assert nc == len(conf_thres_classes), f'Number of classes {nc} does not match length of conf_thres_classes {len(conf_thres_classes)}'
-        assert min(conf_thres_classes) >= 0, f'Invalid Confidence threshold {conf_thres_classes}, valid values are between 0.0 and 1.0'
-        assert max(conf_thres_classes) <= 1, f'Invalid Confidence threshold {conf_thres_classes}, valid values are between 0.0 and 1.0'
-        conf_thres = float(min(conf_thres_classes))
-        conf_thres_classes = torch.tensor(conf_thres_classes, device=prediction.device)  # to gpu
+    
+    if conf_thres_cls:
+        assert nc == len(conf_thres_cls), f'Number of classes {nc} does not match length of conf_thres_classes {len(conf_thres_cls)}'
+        assert min(conf_thres_cls) >= 0, f'Invalid Confidence threshold {conf_thres_cls}, valid values are between 0.0 and 1.0'
+        assert max(conf_thres_cls) <= 1, f'Invalid Confidence threshold {conf_thres_cls}, valid values are between 0.0 and 1.0'
+        conf_thres = float(min(conf_thres_cls))
+        conf_thres_cls = torch.tensor(conf_thres_cls, device=prediction.device)  # to gpu/cpu
+    # Checks
+    assert 0 <= conf_thres <= 1, f'Invalid Confidence threshold {conf_thres}, valid values are between 0.0 and 1.0'
+    assert 0 <= iou_thres <= 1, f'Invalid IoU {iou_thres}, valid values are between 0.0 and 1.0'
+    
     # nm = prediction.shape[1] - nc - 4
     mi = 4 + nc  # mask start index
     xc = prediction[:, 4:mi].amax(1) > conf_thres  # candidates with one of the confs > conf_thres
@@ -91,7 +96,6 @@ def non_max_suppression(
 
         x = x[xc[xi]]  # confidence, xc[xi] is a mask to select boxes with confidence > conf_thres (n_boxes, 6)
 
-
         # If no box remains process next image
         if not x.shape[0]:
             continue
@@ -101,8 +105,8 @@ def non_max_suppression(
 
         # best class only
         conf, j = cls.max(1, keepdim=True)
-        if conf_thres_classes is not None:
-            threshold_mask = conf >= conf_thres_classes[j]
+        if conf_thres_cls is not None:
+            threshold_mask = conf >= conf_thres_cls[j]
         else:
             threshold_mask = conf > conf_thres
 
@@ -126,13 +130,7 @@ def non_max_suppression(
         #concat frame number to output
         output[xi] = torch.cat((frame.unsqueeze(1), output[xi]), 1)
 
-
-
-
     output = torch.cat(output, 0)
-    # print("---------")
-    # print(output)
-    #frames is the first column of output
     frames = output[:, 0].long() # make it a long tensor
     boxes = output[:, 1:5]
     scores = output[:, 5]
