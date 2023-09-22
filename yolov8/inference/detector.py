@@ -44,18 +44,19 @@ class FusionFaceLogoDetector:
         self.ids = {0: "134533", 1: "90020"}
         self.names = {0: "face", 1: "logo"}
 
-        # make sure the suffix is torchscript
         jit = Path(model_path).suffix[1:] == "torchscript"
         if not jit:
             raise NotImplementedError(f'Model path suffix must be .torchscript got {model_path}')
 
         # check confidence thresholds
         self.conf_thrs = self._check_thresholds(conf_thrs)
-        print(f"Confidence thresholds: {self.conf_thrs}")
+        # print(f"Confidence thresholds: {self.conf_thrs}")
 
         # set the device and fp16
         self.device = torch.device(device if torch.cuda.is_available() and device != 'cpu' else 'cpu')
         self.fp16 = fp16
+        if self.device.type == 'cpu' and self.fp16:
+            self.fp16  = False # cpu model runs on float
 
         # load the model and metadata
         self.model, self.metadata = self._load_jit(model_path, self.device, self.fp16)
@@ -87,7 +88,7 @@ class FusionFaceLogoDetector:
         """
 
         # logger.info(f'Loading {w} for TorchScript Runtime inference...')
-        print(f'Loading {w} for TorchScript Runtime inference...')
+        # print(f'Loading {w} for TorchScript Runtime inference...')
         extra_files = {'config.txt': ''}  # model metadata
         model = torch.jit.load(w, _extra_files=extra_files, map_location=device)
         model.half() if fp16 else model.float()
@@ -111,25 +112,36 @@ class FusionFaceLogoDetector:
         Raises:
             NotImplementedError: If the input format is not supported.
         """
-        conf_thrs = conf_thrs if conf_thrs is not None else OrderedDict({134533: 0.2, 90020: 0.1})
+        conf_thrs = conf_thrs if conf_thrs is not None else {134533: 0.2, 90020: 0.1}
 
         # if it's a float, then just output the list of floats
         if isinstance(conf_thrs, float):
+            # check if it's a valid float
+            if not 0.0 <= conf_thrs <= 1.0:
+                raise ValueError(f"Confidence threshold must be between 0.0 and 1.0, got {conf_thrs}")
+
             return [conf_thrs for _ in range(2)]
 
         elif isinstance(conf_thrs, dict):
+
             # if the keys are face and logo, convert them to 134533 and 90020
             if set(conf_thrs.keys()) == set(["face", "logo"]):
-                conf_thrs = OrderedDict({134533: conf_thrs["face"], 90020: conf_thrs["logo"]})
-            # cast the keys to int
-            conf_thrs = {int(k): v for k, v in conf_thrs.items()}
-            # and now we make sure that we map the keys to the right ids
-            conf_thrs = OrderedDict({134533: conf_thrs[134533], 90020: conf_thrs[90020]})
+
+                conf_thrs = [conf_thrs["face"], conf_thrs["logo"]]
+            elif set(conf_thrs.keys()) in [set(["134533", "90020"]),set([134533, 90020])]:
+                # set key to int
+                conf_thrs = {int(k): v for k, v in conf_thrs.items()}
+                conf_thrs = [conf_thrs[134533], conf_thrs[90020]]
+            else:
+                raise NotImplementedError(f"Confidence thresholds keys must be: [face, logo], [134533, 90020], got {set(conf_thrs.keys())}")
         else:
             raise NotImplementedError(f"Confidence thresholds must be either a float, a dict or None, got {type(conf_thrs)}")
-
+        # check if the values are valid
+        if not all([0.0 <= t <= 1.0 for t in conf_thrs]):
+            raise ValueError(f"Confidence threshold must be between 0.0 and 1.0, got {conf_thrs}")
+       
         # extract the list of thresholds
-        return list(conf_thrs.values())
+        return conf_thrs
 
 
     def warmup(self) -> None:
@@ -144,14 +156,14 @@ class FusionFaceLogoDetector:
         """
 
         # logger.info("Warming up the detector model...")
-        print("Warming up the detector model...")
+        # print("Warming up the detector model...")
         im = np.array(np.random.uniform(0, 255, [self.imgsz, self.imgsz, 3]), dtype=np.float32)
 
         im = [im for _ in range(self.batch_size)] if self.batch_size > 1 else [im]
 
         self.detect(im)
         # logger.info("Warmup finished.")
-        print("Warmup finished.")
+        # print("Warmup finished.")
 
     def detect(self, ims: List[np.ndarray], original_shapes: List[List[int]] = None) -> List[List[Union[List[float], bytes, float]]]:
         """
@@ -163,7 +175,7 @@ class FusionFaceLogoDetector:
 
         Returns:
             List[List[Union[List[float], bytes, float]]]: A list of detection results for each image.
-                Each inner list contains information for one detection, including the bounding box coordinates in the xyxy format,
+                Each innermost list contains information for one detection, including the bounding box coordinates in the xyxy format,
                 class label (as a string encoded in UTF-8), and confidence score.
 
         Notes:
@@ -173,6 +185,12 @@ class FusionFaceLogoDetector:
         Raises:
             AssertionError: If the number of detections does not match the number of input images.
         """
+
+        if not isinstance(ims, list):
+            raise NotImplementedError(f"Input must be a list of images, got {type(ims)}")
+
+        if len(ims) == 0:
+            return []
 
         ims, n_ims = self._preprocess(ims)
         preds = self.model(ims)
@@ -184,7 +202,7 @@ class FusionFaceLogoDetector:
         return detections
 
 
-    def _preprocess(self, ims: List[np.ndarray]) -> torch.Tensor:
+    def _preprocess(self, ims: List[np.ndarray]) -> Tuple[torch.Tensor, int]:
         """
             Preprocesses a list of images for inference.
 
@@ -193,6 +211,7 @@ class FusionFaceLogoDetector:
 
             Returns:
                 torch.Tensor: A BCHW tensor with images in the range [0, 1].
+                n_ims (int): The number of (real) images in the batch.
 
             Raises:
                 AssertionError: If the input images have different shapes or if batch size is insufficient.
@@ -255,7 +274,7 @@ class FusionFaceLogoDetector:
 
         Args:
             preds: The raw predictions from the model in the format (batch_size, num_classes + 4, num_boxes).
-            n_ims (int): The number of images in the batch.
+            n_ims (int): The number of (real) images in the batch.
             orig_shapes (List[List[int]], optional): A list of original image shapes with dimensions [H, W].
 
         Returns:
@@ -419,7 +438,7 @@ class FusionFaceLogoDetector:
 if __name__ == '__main__':
 
     detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript",
-                        conf_thrs={"logo": 0.8, "face": 0.1})
+                        conf_thrs={"logo": 0.8, "face": 0.1}, device="cpu")
 
     # read an image from path and convert it to numpy
     img_path = "/home/ec2-user/dev/data/logo05fusion/yolo/images/val/000000053.jpg"
