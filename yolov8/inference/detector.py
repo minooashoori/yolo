@@ -452,8 +452,6 @@ if __name__ == '__main__':
     # pp.pprint(detections)
     
     # visualize the boxes for one image
-    import matplotlib.pyplot as plt
-    import matplotlib.patches as patches
     from utils.boxes import plot_boxes
     
     img = img[0]
