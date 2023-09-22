@@ -458,7 +458,7 @@ if __name__ == '__main__':
     
     img = img[0]
     boxes = detections[0]
-    only_boxes = [box[0] for box in boxes]
+    only_boxes = [[1 if box[1] == b'90020' else 0] + box[0] for box in boxes]
     print(only_boxes)
     
     plot_boxes(img, boxes=only_boxes, box_type="xyxy", save=True)

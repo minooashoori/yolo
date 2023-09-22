@@ -296,30 +296,21 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
 
     if annotation is not None:
         boxes = get_boxes_from_annotation(annotation)
-        # get the number of categories
-        categories = [box[0] for box in boxes]
-        categories = set(categories)
-        n_categories = len(categories)
     else:
-        # add a fictitious category to each box
-        boxes = [[0] + box for box in boxes]
-        categories = [0]
-        n_categories = 1
+        boxes = [[0] + box if len(box) != 5 else box for box in boxes]
 
-    # if path_or_img is a path, we need to open the image
+    categories = set(box[0] for box in boxes)
+    n_categories = len(categories)
+
     if isinstance(path_or_img, str):
         img = Image.open(path_or_img)
-    # if it's numpy array, we need to convert it to PIL image
     elif isinstance(path_or_img, np.ndarray):
-        # read the numpy array as a PIL image
-        # check if it's in the range 0-1 or 0-255
         if path_or_img.max() <= 1.0:
-            path_or_img = path_or_img * 255
-
-        path_or_img = path_or_img.astype(np.uint8)
+            path_or_img = (path_or_img * 255).astype(np.uint8)
         img = Image.fromarray(path_or_img)
     elif isinstance(path_or_img, Image.Image):
         img = path_or_img
+
 
     width, height = img.size
 
@@ -329,7 +320,7 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
     colors = {category: color for category, color in zip(categories, colors_list)}
     # we need to make the figure and the axes
     fig, ax = plt.subplots(1)
-    
+
     ax.imshow(img)
     if len(boxes) > 0:
         for box_ in boxes:
