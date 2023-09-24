@@ -292,7 +292,7 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
         raise ValueError("Only one of boxes or annotation must be provided.")
 
     assert box_type in ["yolo", "xywh", "xyxy"], "box_type must be one of: 'yolo', 'xywh', 'xyxy'"
-    
+
     if scores is not None:
         assert len(scores) == len(boxes), "scores and boxes must have the same length"
 
@@ -349,8 +349,10 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
             ax.add_patch(rect)
     plt.axis('off')
     if save:
-        plt.savefig("boxes.jpg", bbox_inches='tight')
-        print(f"Figure exported to {os.path.join(os.getcwd(), 'boxes.jpg')} ")
+        plt.savefig("boxes.jpg", bbox_inches='tight', pad_inches=0, dpi=300)
+        bold = "\033[1m"
+        reset = "\033[0;0m"
+        print(f"Figure exported to {bold}{os.path.join(os.getcwd(), 'boxes.jpg')}{reset}")
     plt.show()
 
 

@@ -489,37 +489,53 @@ class FusionFaceLogoDetector:
 
 if __name__ == '__main__':
 
-    detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t105_best.torchscript", device="cuda", batch_size=3)
-
-    # read an image from path and convert it to numpy
-    img_path = "/home/ec2-user/dev/ctx-logoface-detector/yolov8/eval/results.jpg"
+    import os
     from PIL import Image
-    img = Image.open(img_path)
-    # send th img to rgb
-    img = img.convert("RGB")
-    img = np.array(img)
-    orig_img = img
-    orig_w, orig_h = img.shape[1], img.shape[0]
-    resizer = Resizer(target_size=416)
-    img = resizer.resize(img)
-    orig_shape = [orig_h, orig_w]   
-    # print(img)
-    black_img = np.zeros((416, 416, 3)).astype(np.uint8)
+    import numpy as np
+    import pprint as pp
     
-    img = [black_img] + [img for _ in range(2)] 
-    orig_shapes = [[416, 416], orig_shape, orig_shape]
+
+    top_level_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    bs = 3
+    img_path = os.path.join(top_level_dir, "images", "ronaldinho.jpg")
+    model_path = os.path.join(top_level_dir, "artifacts", "yolov8s_t105_best.torchscript")
+    device = "cuda:0"
+    imgsz = 416
+
+    # Import and initialize the FusionFaceLogoDetector class with the specified model path and device.
+    detector = FusionFaceLogoDetector(model_path=model_path, device=device, batch_size=bs)
+
+
+    # Open the input image, convert it to RGB, and convert it to a numpy array.
+    img = np.array(Image.open(img_path).convert("RGB"))
+
+    # Store a copy of the original image and its dimensions.
+    orig_img, orig_w, orig_h = img, img.shape[1], img.shape[0]
+    # Store the original shape of the image.
+    orig_shape = [orig_h, orig_w]
+
+    img = Resizer(target_size=imgsz).resize(img)
+
+    # Create a black image with dimensions 416x416x3.
+    black_img = np.zeros((imgsz, imgsz, 3)).astype(np.uint8)
+
+    # Create a list containing the black image and two copies of the resized image.
+    img = [black_img] * (bs-1) + [img] 
+
+    # Create a list containing the original shape of the image repeated three times.
+    orig_shapes = [[imgsz, imgsz] for _ in range(bs-1)] + [orig_shape]
+
+    # Use the detector to perform object detection on the list of images.
     detections = detector.detect(img, orig_shapes)
-    # # print(detections[-1])
-    pp.pprint(detections)
-    
-    # # visualize the boxes for one image
-    # from utils.boxes import plot_boxes
-    
-    img = img[-1]
-    boxes = detections[-1]
+
+    # Extract the last image (the original size image) and its detected boxes.
+    img, boxes = img[-1], detections[-1]
+
+    # Create a modified list of boxes, marking boxes with label '90020' as '1' and others as '0'.
     only_boxes = [[1 if box[1] == b'90020' else 0] + box[0] for box in boxes]
+
+    # Extract the scores of the detected boxes.
     scores = [box[2] for box in boxes]
-    # print(only_boxes)
-    
-    plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores = scores)
-    
+
+    # Plot the boxes on the original image, saving the result as an image file.
+    plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores=scores)
