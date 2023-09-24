@@ -1,10 +1,10 @@
 import unittest
 import numpy as np
-from yolov8.inference.detector import FusionFaceLogoDetector  # Assuming your class is in a file named fusion_face_logo_detector.py
+from fusiondetector.yolov8.inference.detector import FusionFaceLogoDetector  # Assuming your class is in a file named fusion_face_logo_detector.py
 import torch
 
 class TestFusionFaceLogoDetector(unittest.TestCase):
-    
+
     real_model_path = "/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8m_t0_epoch4.torchscript"
 
     def test_invalid_model_path(self):
