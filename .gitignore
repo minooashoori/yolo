@@ -165,5 +165,5 @@ wandb/
 .DS_Store
 .idea/
 *.pt
-**/*.jpg
+!/artifacts/*.pt # except for artifacts
 ```
