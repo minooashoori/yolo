@@ -6,10 +6,44 @@ import numpy as np
 import torch
 import pprint
 from nms import non_max_suppression
+import cv2
+from utils.boxes import plot_boxes
 
 # from compute_common.logger import logger
 torch.set_printoptions(sci_mode=False)
 pp = pprint.PrettyPrinter(indent=4)
+
+
+class Resizer:
+    """
+    A simple Resizer.
+    """
+
+    def __init__(self, target_size: int, padding=True):
+        self.target_shape = (target_size, target_size)
+        self.padding = padding
+
+    def resize(self, image: np.ndarray) -> np.ndarray:
+        """
+        Resize an image to a square image with padding to keep the same aspect ratio.
+        """
+        target_h, target_w = self.target_shape
+        height, width, _ = image.shape
+        scale = min(float(target_w) / float(width), float(target_h) / float(height))
+        new_width, new_heigth = int(scale * width), int(scale * height)
+
+        image = cv2.resize(image, (new_width, new_heigth))
+        if self.padding:
+            x_0 = int((target_h - image.shape[0]) / 2)
+            x_1 = target_h - (image.shape[0] + x_0)
+            y_0 = int((target_w - image.shape[1]) / 2)
+            y_1 = target_w - (image.shape[1] + y_0)
+            image = np.pad(image, [[x_0, x_1], [y_0, y_1], [0, 0]])
+
+        if image.dtype == np.uint8:
+            return image
+        else:
+            return image.astype(np.uint8)
 
 class FusionFaceLogoDetector:
 
@@ -113,7 +147,7 @@ class FusionFaceLogoDetector:
         Raises:
             NotImplementedError: If the input format is not supported.
         """
-        conf_thrs = conf_thrs if conf_thrs is not None else {134533: 0.2, 90020: 0.1}
+        conf_thrs = conf_thrs if conf_thrs is not None else {134533: 0.2, 90020: 0.12}
 
         # if it's a float, then just output the list of floats
         if isinstance(conf_thrs, float):
@@ -223,7 +257,7 @@ class FusionFaceLogoDetector:
         """
 
         # Ensure that all input images have the same shape
-        assert self._images_same_shapes(ims)
+        assert self._images_same_shapes(ims), f"Expected input images to have the same shape, ({self.imgsz}, {self.imgsz}, 3)."
 
         n_ims = len(ims)
         batch_size = self.batch_size if self.batch_size != -1 else n_ims
@@ -232,17 +266,34 @@ class FusionFaceLogoDetector:
 
         if batch_size > n_ims:
             n_ims_add = batch_size - n_ims
-            black_im = np.zeros((self.imgsz, self.imgsz, 3), dtype=np.float32) # HWC
+            black_im = np.zeros((self.imgsz, self.imgsz, 3)).astype(np.uint8) # HWC
+            # black_im = (black_im * 255).astype(np.uint8)
             ims += [black_im for _ in range(n_ims_add)] # [B x [HWC]]
 
+
         # convert to torch tensor
-        ims = torch.from_numpy(np.stack(ims)).permute(0, 3, 1, 2).contiguous() # BCHW
+        ims = torch.from_numpy(np.stack(ims)).permute(0, 3, 1, 2).contiguous().float() # BCHW
         ims = ims.to(self.device)
         ims = ims.half() if self.fp16 else ims.float() # uint8 to fp16/32
+        ims /= 255.0 # 0 - 255 to 0.0 - 1.0
         # check if  we indeed are  using the right dtype
         assert ims.dtype == torch.float16 if self.fp16 else torch.float32
-        ims /= 255.0 # 0 - 255 to 0.0 - 1.0
+
         return ims, n_ims
+    
+        #     not_tensor = not isinstance(im, torch.Tensor)
+        # if not_tensor:
+        #     im = np.stack(self.pre_transform(im))
+        #     im = im[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
+        #     im = np.ascontiguousarray(im)  # contiguous
+        #     im = torch.from_numpy(im)
+
+        # im = im.to(self.device)
+        # im = im.half() if self.model.fp16 else im.float()  # uint8 to fp16/32
+        # if not_tensor:
+        #     im /= 255  # 0 - 255 to 0.0 - 1.0
+        # return im
+
 
 
     def _filter(self,
@@ -438,26 +489,37 @@ class FusionFaceLogoDetector:
 
 if __name__ == '__main__':
 
-    detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript", device="cuda", box_min_perc=0.0)
+    detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t105_best.torchscript", device="cuda", batch_size=3)
 
     # read an image from path and convert it to numpy
-    img_path = "/home/ec2-user/dev/data/logo05fusion/yolo/images/val/000000054.jpg"
+    img_path = "/home/ec2-user/dev/ctx-logoface-detector/yolov8/eval/results.jpg"
     from PIL import Image
     img = Image.open(img_path)
+    # send th img to rgb
+    img = img.convert("RGB")
     img = np.array(img)
+    orig_img = img
+    orig_w, orig_h = img.shape[1], img.shape[0]
+    resizer = Resizer(target_size=416)
+    img = resizer.resize(img)
+    orig_shape = [orig_h, orig_w]   
     # print(img)
-    img = [img for _ in range(3)]
-    orig_shapes = [[400, 400], [800, 800], [600, 600]]
+    black_img = np.zeros((416, 416, 3)).astype(np.uint8)
+    
+    img = [black_img] + [img for _ in range(2)] 
+    orig_shapes = [[416, 416], orig_shape, orig_shape]
     detections = detector.detect(img, orig_shapes)
-    # pp.pprint(detections)
+    # # print(detections[-1])
+    pp.pprint(detections)
     
-    # visualize the boxes for one image
-    from utils.boxes import plot_boxes
+    # # visualize the boxes for one image
+    # from utils.boxes import plot_boxes
     
-    img = img[0]
-    boxes = detections[0]
+    img = img[-1]
+    boxes = detections[-1]
     only_boxes = [[1 if box[1] == b'90020' else 0] + box[0] for box in boxes]
-    print(only_boxes)
+    scores = [box[2] for box in boxes]
+    # print(only_boxes)
     
-    plot_boxes(img, boxes=only_boxes, box_type="xyxy", save=True)
+    plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores = scores)
     

@@ -158,7 +158,7 @@ class Mosaic(BaseMixTransform):
 
             # Place img in img4
             if i == 0:  # top left
-                img4 = np.full((s * 2, s * 2, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
+                img4 = np.full((s * 2, s * 2, img.shape[2]), 0, dtype=np.uint8)  # base image with 4 tiles
                 x1a, y1a, x2a, y2a = max(xc - w, 0), max(yc - h, 0), xc, yc  # xmin, ymin, xmax, ymax (large image)
                 x1b, y1b, x2b, y2b = w - (x2a - x1a), h - (y2a - y1a), w, h  # xmin, ymin, xmax, ymax (small image)
             elif i == 1:  # top right
@@ -194,7 +194,7 @@ class Mosaic(BaseMixTransform):
 
             # Place img in img9
             if i == 0:  # center
-                img9 = np.full((s * 3, s * 3, img.shape[2]), 114, dtype=np.uint8)  # base image with 4 tiles
+                img9 = np.full((s * 3, s * 3, img.shape[2]), 0, dtype=np.uint8)  # base image with 4 tiles
                 h0, w0 = h, w
                 c = s, s, s + w, s + h  # xmin, ymin, xmax, ymax (base) coordinates
             elif i == 1:  # top
@@ -299,6 +299,9 @@ class RandomPerspective:
         self.border = border
         self.pre_transform = pre_transform
 
+        # print("in RandomPerspective")
+        # print(self.pre_transform)
+
     def affine_transform(self, img, border):
         """Center."""
         C = np.eye(3, dtype=np.float32)
@@ -334,9 +337,9 @@ class RandomPerspective:
         # Affine image
         if (border[0] != 0) or (border[1] != 0) or (M != np.eye(3)).any():  # image changed
             if self.perspective:
-                img = cv2.warpPerspective(img, M, dsize=self.size, borderValue=(114, 114, 114))
+                img = cv2.warpPerspective(img, M, dsize=self.size, borderValue=(0, 0, 0))
             else:  # affine
-                img = cv2.warpAffine(img, M[:2], dsize=self.size, borderValue=(114, 114, 114))
+                img = cv2.warpAffine(img, M[:2], dsize=self.size, borderValue=(0, 0, 0))
         return img, M, s
 
     def apply_bboxes(self, bboxes, M):
@@ -455,7 +458,7 @@ class RandomPerspective:
         # Make the bboxes have the same scale with new_bboxes
         i = self.box_candidates(box1=instances.bboxes.T,
                                 box2=new_instances.bboxes.T,
-                                area_thr=0.01 if len(segments) else 0.10)
+                                area_thr=0.01 if len(segments) else 0.5)
         labels['instances'] = new_instances[i]
         labels['cls'] = cls[i]
         labels['img'] = img
@@ -579,7 +582,7 @@ class LetterBox:
         top, bottom = int(round(dh - 0.1)) if self.center else 0, int(round(dh + 0.1))
         left, right = int(round(dw - 0.1)) if self.center else 0, int(round(dw + 0.1))
         img = cv2.copyMakeBorder(img, top, bottom, left, right, cv2.BORDER_CONSTANT,
-                                 value=(114, 114, 114))  # add border
+                                 value=(0, 0, 0))  # add border
 
         if len(labels):
             labels = self._update_labels(labels, ratio, dw, dh)
@@ -653,15 +656,29 @@ class Albumentations:
 
             check_version(A.__version__, '1.0.3', hard=True)  # version requirement
 
+            # T = [
+            #     A.Blur(p=0.01),
+            #     A.MedianBlur(p=0.01),
+            #     A.ToGray(p=0.01),
+            #     A.CLAHE(p=0.01),
+            #     A.RandomBrightnessContrast(p=0.0),
+            #     A.RandomGamma(p=0.0),
+            #     A.ImageCompression(quality_lower=75, p=0.0)]  # transforms
             T = [
-                A.Blur(p=0.01),
-                A.MedianBlur(p=0.01),
-                A.ToGray(p=0.01),
-                A.CLAHE(p=0.01),
-                A.RandomBrightnessContrast(p=0.0),
-                A.RandomGamma(p=0.0),
-                A.ImageCompression(quality_lower=75, p=0.0)]  # transforms
-            self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels']))
+                A.Blur(p=0.05),
+                A.MedianBlur(p=0.05),
+                A.ToGray(p=0.05),
+                A.CLAHE(p=0.05),
+                A.RandomBrightnessContrast(p=0.05),
+                A.RandomGamma(p=0.05),
+                A.ColorJitter(p=0.05),
+                A.Solarize(p=0.02),
+                A.PixelDropout(p=0.01),
+                A.InvertImg(p=0.01),
+                A.GaussNoise(p=0.05),
+                A.ImageCompression(quality_lower=75, p=0.05),
+                ]  # transforms
+            self.transform = A.Compose(T, bbox_params=A.BboxParams(format='yolo', label_fields=['class_labels'], min_visibility=0.8))
 
             LOGGER.info(prefix + ', '.join(f'{x}'.replace('always_apply=False, ', '') for x in T if x.p))
         except ImportError:  # package not installed, skip
@@ -761,6 +778,19 @@ class Format:
 
 def v8_transforms(dataset, imgsz, hyp, stretch=False):
     """Convert images to a size suitable for YOLOv8 training."""
+    
+    # print("v8_transforms")
+    # print("hyp.mosaic",hyp.mosaic)
+    # print("hyp.mixup",hyp.mixup)
+    # print("hyp.copy_paste",hyp.copy_paste)
+    # print("hyp.degrees",hyp.degrees)
+    # print("hyp.translate",hyp.translate)
+    # print("hyp.scale",hyp.scale)
+    # print("hyp.shear",hyp.shear)
+    # print("hyp.perspective",hyp.perspective)
+    # print("stretch",stretch)
+    # print("hyp.fliplr",hyp.fliplr)
+    # print("hyp.flipud",hyp.flipud)
     pre_transform = Compose([
         Mosaic(dataset, imgsz=imgsz, p=hyp.mosaic),
         CopyPaste(p=hyp.copy_paste),
@@ -866,7 +896,7 @@ class ClassifyLetterBox:
         h, w = round(imh * r), round(imw * r)  # resized image
         hs, ws = (math.ceil(x / self.stride) * self.stride for x in (h, w)) if self.auto else self.h, self.w
         top, left = round((hs - h) / 2 - 0.1), round((ws - w) / 2 - 0.1)
-        im_out = np.full((self.h, self.w, 3), 114, dtype=im.dtype)
+        im_out = np.full((self.h, self.w, 3), 0, dtype=im.dtype)
         im_out[top:top + h, left:left + w] = cv2.resize(im, (w, h), interpolation=cv2.INTER_LINEAR)
         return im_out
 

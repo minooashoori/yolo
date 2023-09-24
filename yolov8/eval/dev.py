@@ -7,16 +7,16 @@ import argparse
 from tqdm import tqdm
 
 parser = argparse.ArgumentParser()
-parser.add_argument("--model_path", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.pt")
+parser.add_argument("--model_path", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t105_best.pt")
 parser.add_argument("--model", type=str, default="train51")
 parser.add_argument("--epoch", type=int, default=59)
 parser.add_argument("--conf", type=float, default=0.01)
-parser.add_argument("--img_folder", type=str, default="/home/ec2-user/dev/data/logo05/yolo/images/test")
-# parser.add_argument("--img_folder", type=str, default="/home/ec2-user/dev/data/widerface/unzip/val")
-parser.add_argument("--output_folder", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo_small")
-# parser.add_argument("--output_folder", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small")
+# parser.add_argument("--img_folder", type=str, default="/home/ec2-user/dev/data/logo05/yolo/images/test")
+parser.add_argument("--img_folder", type=str, default="/home/ec2-user/dev/data/widerface/unzip/val")
+# parser.add_argument("--output_folder", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo_small")
+parser.add_argument("--output_folder", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small")
 parser.add_argument("--runs_folder", type=str, default="/home/ec2-user/dev/yolo/runs/detect")
-parser.add_argument("--c", type=int, default=1)
+parser.add_argument("--c", type=int, default=0)
 parser.add_argument("--show", type=bool, default=True)
 args = parser.parse_args()
 

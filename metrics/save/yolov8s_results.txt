@@ -20,3 +20,144 @@ mAP: 68.94%
 face: (thres 0.2)
 mAP: 48.61%
 [{'class': '0', 'precision': 0.82, 'recall': 0.44}]
+
+train82 (yolov8s)
+
+logo:
+thres 0.2
+mAP: 71.01%
+[{'class': '1', 'precision': 0.67, 'recall': 0.7}]
+
+thres 0.15
+mAP: 71.01%
+[{'class': '1', 'precision': 0.62, 'recall': 0.73}]
+
+face:
+thres 0.2
+mAP: 49.00%
+[{'class': '0', 'precision': 0.89, 'recall': 0.41}]
+
+thres 0.15
+mAP: 49.00%
+[{'class': '0', 'precision': 0.85, 'recall': 0.43}]
+
+
+train103 (yolov8s) epoch 29
+
+logo:
+
+-conf 0.15
+AP: 70.17% (1)
+mAP: 70.17%
+[{'class': '1', 'precision': 0.63, 'recall': 0.72}]
+
+-conf 0.2
+AP: 70.17% (1)
+mAP: 70.17%
+[{'class': '1', 'precision': 0.68, 'recall': 0.7}]
+
+face:
+
+-conf 0.2
+AP: 47.90% (0)
+mAP: 47.90%
+[{'class': '0', 'precision': 0.9, 'recall': 0.4}]
+
+-conf 0.15
+AP: 47.90% (0)
+mAP: 47.90%
+[{'class': '0', 'precision': 0.86, 'recall': 0.42}]
+
+-conf 0.1
+AP: 47.90% (0)
+mAP: 47.90%
+[{'class': '0', 'precision': 0.8, 'recall': 0.44}]
+
+
+train104 (yolov8s) last.pt
+
+logo:
+❯ -conf 0.2
+AP: 70.67% (1)
+mAP: 70.67%
+[{'class': '1', 'precision': 0.7, 'recall': 0.7}]
+
+-conf 0.15
+AP: 70.67% (1)
+mAP: 70.67%
+[{'class': '1', 'precision': 0.65, 'recall': 0.72}]
+
+❯ python pascalvoc.py --gt /home/ec2-user/dev/data/logo05/annotations/gts_preds/gts --det /home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo_small  -t 0.45 -conf 0.1
+
+
+AP: 70.67% (1)
+mAP: 70.67%
+[{'class': '1', 'precision': 0.59, 'recall': 0.74}]
+
+
+
+face:
+
+❯ python pascalvoc.py --gt /home/ec2-user/dev/data/widerface/gts_preds/gts --det /home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small -t 0.45 -conf 0.2
+AP: 48.40% (0)
+mAP: 48.40%
+[{'class': '0', 'precision': 0.89, 'recall': 0.41}]
+
+❯ python pascalvoc.py --gt /home/ec2-user/dev/data/widerface/gts_preds/gts --det /home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small -t 0.45 -conf 0.15
+AP: 48.40% (0)
+mAP: 48.40%
+[{'class': '0', 'precision': 0.85, 'recall': 0.43}]
+
+❯ python pascalvoc.py --gt /home/ec2-user/dev/data/widerface/gts_preds/gts --det /home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small -t 0.45 -conf 0.1
+AP: 48.40% (0)
+mAP: 48.40%
+[{'class': '0', 'precision': 0.79, 'recall': 0.45}]
+
+train105 (yolov8s) best.pt
+
+
+- logo:
+
+❯  python pascalvoc.py --gt /home/ec2-user/dev/data/logo05/annotations/gts_preds/gts --det /home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo_small  -t 0.45 -conf 0.2
+Folder /home/ec2-user/dev/ctx-logoface-detector/metrics/results already exists and may contain important results.
+
+AP: 70.83% (1)
+mAP: 70.83%
+[{'class': '1', 'precision': 0.69, 'recall': 0.7}]
+❯  python pascalvoc.py --gt /home/ec2-user/dev/data/logo05/annotations/gts_preds/gts --det /home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo_small  -t 0.45 -conf 0.15
+Folder /home/ec2-user/dev/ctx-logoface-detector/metrics/results already exists and may contain important results.
+
+AP: 70.83% (1)
+mAP: 70.83%
+[{'class': '1', 'precision': 0.64, 'recall': 0.72}]
+❯  python pascalvoc.py --gt /home/ec2-user/dev/data/logo05/annotations/gts_preds/gts --det /home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolo_small  -t 0.45 -conf 0.1
+Folder /home/ec2-user/dev/ctx-logoface-detector/metrics/results already exists and may contain important results.
+
+AP: 70.83% (1)
+mAP: 70.83%
+[{'class': '1', 'precision': 0.58, 'recall': 0.74}]
+
+
+- face
+
+❯ python pascalvoc.py --gt /home/ec2-user/dev/data/widerface/gts_preds/gts --det /home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small -t 0.45 -conf 0.2
+Folder /home/ec2-user/dev/ctx-logoface-detector/metrics/results already exists and may contain important results.
+
+AP: 49.25% (0)
+mAP: 49.25%
+[{'class': '0', 'precision': 0.87, 'recall': 0.42}]
+
+❯ python pascalvoc.py --gt /home/ec2-user/dev/data/widerface/gts_preds/gts --det /home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small -t 0.45 -conf 0.15
+Folder /home/ec2-user/dev/ctx-logoface-detector/metrics/results already exists and may contain important results.
+
+AP: 49.25% (0)
+mAP: 49.25%
+[{'class': '0', 'precision': 0.82, 'recall': 0.44}]
+
+❯ python pascalvoc.py --gt /home/ec2-user/dev/data/widerface/gts_preds/gts --det /home/ec2-user/dev/data/widerface/gts_preds/preds_yolo_small -t 0.45 -conf 0.10
+Folder /home/ec2-user/dev/ctx-logoface-detector/metrics/results already exists and may contain important results.
+
+AP: 49.25% (0)
+mAP: 49.25%
+[{'class': '0', 'precision': 0.75, 'recall': 0.46}]
+

@@ -284,7 +284,7 @@ def get_boxes_from_annotation(annotation):
     return boxes
 
 
-def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=False, is_normalized=True):
+def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=False, is_normalized=True, scores=None):
 
     if boxes is None and annotation is None:
         raise ValueError("Either boxes or annotation must be provided.")
@@ -292,6 +292,9 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
         raise ValueError("Only one of boxes or annotation must be provided.")
 
     assert box_type in ["yolo", "xywh", "xyxy"], "box_type must be one of: 'yolo', 'xywh', 'xyxy'"
+    
+    if scores is not None:
+        assert len(scores) == len(boxes), "scores and boxes must have the same length"
 
 
     if annotation is not None:
@@ -324,7 +327,7 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
     ax.imshow(img)
     if len(boxes) > 0:
         for box_ in boxes:
-            
+
             category, box = box_[0], box_[1:]
             if box_type == "yolo":
                 # x1, y1, w, h = make_patch_format(box, width, height)
@@ -338,9 +341,13 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
                 x1, y1, w, h = x1*width, y1*height, w*width, h*height
             # create a rectangle patch
             rect = patches.Rectangle((x1, y1), w, h, linewidth=2, edgecolor=color, facecolor='none')
+            if scores:
+                # plot scores on top of the boxes if provided
+                ax.text(x1, y1, f"{round(scores[boxes.index(box_)], 2)}", fontsize=12, color=color)
 
             # add the patch to the axes
             ax.add_patch(rect)
+    plt.axis('off')
     if save:
         plt.savefig("boxes.jpg", bbox_inches='tight')
         print(f"Figure exported to {os.path.join(os.getcwd(), 'boxes.jpg')} ")
