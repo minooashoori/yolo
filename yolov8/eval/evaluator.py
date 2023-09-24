@@ -81,7 +81,7 @@ def inference(args):
         print(f"Saved sample predictions to {pred_path}")
     print(f"Saved {count} inference files to {args.output_folder}")
 
-def main():
+def main(args):
     inference(args)
 
 if __name__ == "__main__":

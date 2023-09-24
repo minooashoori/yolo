@@ -278,7 +278,7 @@ class FusionFaceLogoDetector:
         assert ims.dtype == torch.float16 if self.fp16 else torch.float32
 
         return ims, n_ims
-    
+
         #     not_tensor = not isinstance(im, torch.Tensor)
         # if not_tensor:
         #     im = np.stack(self.pre_transform(im))
@@ -497,9 +497,8 @@ if __name__ == '__main__':
     top_level_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     bs = 3
     img_path = os.path.join(top_level_dir, "images", "ronaldinho.jpg")
-    # model_path = os.path.join(top_level_dir, "artifacts", "yolov8m_t51_epoch59.torchscript")
-    model_path = "/home/ec2-user/dev/yolo/runs/detect/train/weights/epoch4.torchscript"
-    device = "cpu"
+    model_path = os.path.join(top_level_dir, "artifacts", "yolov8m_t0_epoch4.torchscript")
+    device = "cuda"
     imgsz = 416
 
     # Import and initialize the FusionFaceLogoDetector class with the specified model path and device.

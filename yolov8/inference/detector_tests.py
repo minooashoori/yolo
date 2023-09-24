@@ -4,6 +4,8 @@ from detector import FusionFaceLogoDetector  # Assuming your class is in a file 
 import torch
 
 class TestFusionFaceLogoDetector(unittest.TestCase):
+    
+    real_model_path = "/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8m_t0_epoch4.torchscript"
 
     def test_invalid_model_path(self):
         # Test initializing the detector with an invalid model path
@@ -26,7 +28,7 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
     def test_valid_model_paths(self):
         # Test initializing the detector with valid model paths
         model_paths = [
-            "/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript",
+            self.real_model_path,
         ]
         for model_path in model_paths:
             with self.subTest(model_path=model_path):
@@ -46,7 +48,7 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
     def test_initialize_on_cpu(self):
         # Test initializing the detector on CPU
         detector = FusionFaceLogoDetector(
-            model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript",
+            model_path=self.real_model_path,
             conf_thrs={"face": 0.5, "logo": 0.6},
             device="cpu"  # Initialize on CPU
         )
@@ -58,7 +60,7 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
 
     def setUp(self):
         # Initialize the detector with a sample TorchScript model (provide the actual path)
-        self.detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript")
+        self.detector = FusionFaceLogoDetector(model_path=self.real_model_path)
 
     def test_initialization(self):
         # Test the initialization of the detector
@@ -150,7 +152,7 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
 
     def test_detect_cpu(self):
         # set the model to CPU
-        detector = FusionFaceLogoDetector(model_path="/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t74_best.torchscript", device="cpu")
+        detector = FusionFaceLogoDetector(model_path=self.real_model_path, device="cpu")
         sample_image = np.random.uniform(0, 255, [self.detector.imgsz, self.detector.imgsz, 3]).astype(np.float32)
         detections = detector.detect([sample_image])
 
