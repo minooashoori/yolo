@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from detector import FusionFaceLogoDetector  # Assuming your class is in a file named fusion_face_logo_detector.py
+from yolov8.inference.detector import FusionFaceLogoDetector  # Assuming your class is in a file named fusion_face_logo_detector.py
 import torch
 
 class TestFusionFaceLogoDetector(unittest.TestCase):
