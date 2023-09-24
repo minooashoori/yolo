@@ -165,5 +165,4 @@ wandb/
 .DS_Store
 .idea/
 *.pt
-!/artifacts/*.pt # except for artifacts
 ```
