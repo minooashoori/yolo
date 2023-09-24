@@ -75,7 +75,11 @@ def download_image_s3(row, timeout, user_agent_token, disallowed_header_directiv
 
 def download_image_with_retry(row, timeout, retries, user_agent_token, disallowed_header_directives):
     for _ in range(retries + 1):
-        key, img_stream, err = download_image_s3(row, timeout, user_agent_token, disallowed_header_directives)
+        # add a test if the url is s3 if not use the previous function
+        if row[1].startswith("s3://"):
+            key, img_stream, err = download_image_s3(row, timeout, user_agent_token, disallowed_header_directives)
+        else:
+            key, img_stream, err = download_image(row, timeout, user_agent_token, disallowed_header_directives)
         if img_stream is not None:
             return key, img_stream, err
     return key, None, err
