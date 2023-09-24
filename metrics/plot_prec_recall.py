@@ -147,10 +147,10 @@ if __name__ == "__main__":
 
     args = argparse.ArgumentParser()
     args.add_argument("--prod", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/save/prod_face.yaml")
-    args.add_argument("--dev", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/save/yolov8s_face_2.yaml")
+    args.add_argument("--dev", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/save/yolov8m_face_t1.yaml")
     args.add_argument("--save_dir", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/plots")
     args.add_argument("--c",  type=str, default="face")
-    args.add_argument("--model",  type=str, default="yolov8s")
+    args.add_argument("--model",  type=str, default="yolov8m")
 
     args = args.parse_args()
 

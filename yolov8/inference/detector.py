@@ -4,14 +4,9 @@ from typing import List, Tuple, Union
 
 import numpy as np
 import torch
-import pprint
 from nms import non_max_suppression
-import cv2
-from utils.boxes import plot_boxes
-
 # from compute_common.logger import logger
 torch.set_printoptions(sci_mode=False)
-pp = pprint.PrettyPrinter(indent=4)
 
 
 class Resizer:
@@ -23,10 +18,12 @@ class Resizer:
         self.target_shape = (target_size, target_size)
         self.padding = padding
 
+
     def resize(self, image: np.ndarray) -> np.ndarray:
         """
         Resize an image to a square image with padding to keep the same aspect ratio.
         """
+        import cv2
         target_h, target_w = self.target_shape
         height, width, _ = image.shape
         scale = min(float(target_w) / float(width), float(target_h) / float(height))
@@ -76,9 +73,10 @@ class FusionFaceLogoDetector:
         device: str = "cuda:0",
         max_det: int = 100,
     ):
-        # set the ids and names
+        # set the ids, names and default threshold
         self.ids = {0: "134533", 1: "90020"}
         self.names = {0: "face", 1: "logo"}
+        self.default_thrs = {134533: 0.15, 90020: 0.15}
 
         jit = Path(model_path).suffix[1:] == "torchscript"
         if not jit:
@@ -132,8 +130,8 @@ class FusionFaceLogoDetector:
             metadata = json.loads(extra_files['config.txt'], object_hook=lambda x: dict(x.items()))
         return model, metadata
 
-    @staticmethod
-    def _check_thresholds(conf_thrs: Union[dict, float]) -> List[float]:
+
+    def _check_thresholds(self, conf_thrs: Union[dict, float]) -> List[float]:
         """
         Check and transform confidence thresholds.
 
@@ -147,7 +145,7 @@ class FusionFaceLogoDetector:
         Raises:
             NotImplementedError: If the input format is not supported.
         """
-        conf_thrs = conf_thrs if conf_thrs is not None else {134533: 0.2, 90020: 0.12}
+        conf_thrs = conf_thrs if conf_thrs is not None else self.default_thrs
 
         # if it's a float, then just output the list of floats
         if isinstance(conf_thrs, float):
@@ -493,13 +491,15 @@ if __name__ == '__main__':
     from PIL import Image
     import numpy as np
     import pprint as pp
-    
+    from utils.boxes import plot_boxes
+
 
     top_level_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     bs = 3
     img_path = os.path.join(top_level_dir, "images", "ronaldinho.jpg")
-    model_path = os.path.join(top_level_dir, "artifacts", "yolov8s_t105_best.torchscript")
-    device = "cuda:0"
+    # model_path = os.path.join(top_level_dir, "artifacts", "yolov8m_t51_epoch59.torchscript")
+    model_path = "/home/ec2-user/dev/yolo/runs/detect/train/weights/epoch4.torchscript"
+    device = "cpu"
     imgsz = 416
 
     # Import and initialize the FusionFaceLogoDetector class with the specified model path and device.
@@ -519,14 +519,15 @@ if __name__ == '__main__':
     # Create a black image with dimensions 416x416x3.
     black_img = np.zeros((imgsz, imgsz, 3)).astype(np.uint8)
 
-    # Create a list containing the black image and two copies of the resized image.
-    img = [black_img] * (bs-1) + [img] 
+    # Create a list containing black and original images.
+    img = [black_img] * (bs-1) + [img]
 
-    # Create a list containing the original shape of the image repeated three times.
+    # Create a list containing the original shapes
     orig_shapes = [[imgsz, imgsz] for _ in range(bs-1)] + [orig_shape]
 
     # Use the detector to perform object detection on the list of images.
     detections = detector.detect(img, orig_shapes)
+    pp.pprint(detections)
 
     # Extract the last image (the original size image) and its detected boxes.
     img, boxes = img[-1], detections[-1]
