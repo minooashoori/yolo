@@ -5,7 +5,6 @@ import os
 import shutil
 import sys
 
-import _init_paths
 from BoundingBox import BoundingBox
 from BoundingBoxes import BoundingBoxes
 from Evaluator import *
@@ -370,7 +369,6 @@ for metricsPerClass in detections:
         f.write('\nAP: %s' % ap_str)
         f.write('\nPrecision: %s' % prec)
         f.write('\nRecall: %s' % rec)
-        
         results_per_class["ap"] = float(ap)
     results[cl] = results_per_class
 
