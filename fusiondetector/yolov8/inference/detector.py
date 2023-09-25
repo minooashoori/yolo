@@ -4,7 +4,8 @@ from typing import List, Tuple, Union
 
 import numpy as np
 import torch
-from nms import non_max_suppression
+from fusiondetector.yolov8.inference.nms import non_max_suppression
+from fusiondetector import IMAGES_DIR, ARTIFACTS_DIR, OUTPUTS_DIR
 # from compute_common.logger import logger
 torch.set_printoptions(sci_mode=False)
 
@@ -279,19 +280,6 @@ class FusionFaceLogoDetector:
 
         return ims, n_ims
 
-        #     not_tensor = not isinstance(im, torch.Tensor)
-        # if not_tensor:
-        #     im = np.stack(self.pre_transform(im))
-        #     im = im[..., ::-1].transpose((0, 3, 1, 2))  # BGR to RGB, BHWC to BCHW, (n, 3, h, w)
-        #     im = np.ascontiguousarray(im)  # contiguous
-        #     im = torch.from_numpy(im)
-
-        # im = im.to(self.device)
-        # im = im.half() if self.model.fp16 else im.float()  # uint8 to fp16/32
-        # if not_tensor:
-        #     im /= 255  # 0 - 255 to 0.0 - 1.0
-        # return im
-
 
 
     def _filter(self,
@@ -491,13 +479,12 @@ if __name__ == '__main__':
     from PIL import Image
     import numpy as np
     import pprint as pp
-    from utils.boxes import plot_boxes
+    from fusiondetector.utils.boxes import plot_boxes
 
 
-    top_level_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     bs = 3
-    img_path = os.path.join(top_level_dir, "images", "ronaldinho.jpg")
-    model_path = os.path.join(top_level_dir, "artifacts", "yolov8m_t0_epoch4.torchscript")
+    img_path = os.path.join(IMAGES_DIR, "ronaldinho.jpg")
+    model_path = os.path.join(ARTIFACTS_DIR, "yolov8m_t0_epoch4.torchscript")
     device = "cuda"
     imgsz = 416
 
@@ -538,4 +525,4 @@ if __name__ == '__main__':
     scores = [box[2] for box in boxes]
 
     # Plot the boxes on the original image, saving the result as an image file.
-    plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores=scores)
+    plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores=scores, output_dir = OUTPUTS_DIR)

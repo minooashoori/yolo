@@ -284,7 +284,7 @@ def get_boxes_from_annotation(annotation):
     return boxes
 
 
-def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=False, is_normalized=True, scores=None):
+def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=False, is_normalized=True, scores=None, output_dir=None):
 
     if boxes is None and annotation is None:
         raise ValueError("Either boxes or annotation must be provided.")
@@ -343,16 +343,16 @@ def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=F
             rect = patches.Rectangle((x1, y1), w, h, linewidth=2, edgecolor=color, facecolor='none')
             if scores:
                 # plot scores on top of the boxes if provided
-                ax.text(x1, y1, f"{round(scores[boxes.index(box_)], 2)}", fontsize=12, color=color)
+                ax.text(x1, y1, fr"$\mathbf{{{round(scores[boxes.index(box_)], 2)}}}$", fontsize=12, color=color)
 
             # add the patch to the axes
             ax.add_patch(rect)
     plt.axis('off')
     if save:
-        plt.savefig("boxes.jpg", bbox_inches='tight', pad_inches=0, dpi=300)
-        bold = "\033[1m"
-        reset = "\033[0;0m"
-        print(f"Figure exported to {bold}{os.path.join(os.getcwd(), 'boxes.jpg')}{reset}")
+        output_dir = output_dir or os.getcwd()
+        filename = os.path.join(output_dir, 'boxes.jpg')
+        print(f"Figure exported to \033[1m{filename}\033[0;0m")
+        plt.savefig(filename, bbox_inches='tight', pad_inches=0, dpi=300)
     plt.show()
 
 

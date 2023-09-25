@@ -1,9 +1,5 @@
 import os
-import sys
-# sys.path.append("/home/ec2-user/dev/ctx-logoface-detector/img2dataset")
-
 import img2dataset as i2d
-import webdataset as wds
 import tarfile
 import shutil
 import glob
@@ -292,14 +288,14 @@ if  __name__ == "__main__":
     # tfusion_train.format_yolo()
 
 
-    logodet3k_val = LogoDet3KDataset(
-        split="val",
-        input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/val/"
-    )
-    logodet3k_val.download(input_format="parquet",
-                           url_col="uri",
-                           overwrite=False)
-    logodet3k_val.format_yolo()
+    # logodet3k_val = LogoDet3KDataset(
+    #     split="val",
+    #     input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/val/"
+    # )
+    # logodet3k_val.download(input_format="parquet",
+    #                        url_col="uri",
+    #                        overwrite=False)
+    # logodet3k_val.format_yolo()
 
     # logodet3k_train = LogoDet3KDataset(
     #     split="train",
@@ -357,16 +353,16 @@ if  __name__ == "__main__":
     # portal_train.format_yolo(overwrite=True, keep_original_filenames=True, get_original_url_width_height=False)
     
     
-    portal_test = PortalDataset(
-        split="val",
-        input_path = "/home/ec2-user/dev/data/portal/test.parquet",
-    )
+    # portal_test = PortalDataset(
+    #     split="val",
+    #     input_path = "/home/ec2-user/dev/data/portal/test.parquet",
+    # )
     
-    portal_test.download(input_format="parquet",
-                            url_col="s3_uri",
-                            annotation_col="yolo_annotations",
-                            overwrite=True)
+    # portal_test.download(input_format="parquet",
+    #                         url_col="s3_uri",
+    #                         annotation_col="yolo_annotations",
+    #                         overwrite=True)
     
-    portal_test.format_yolo(overwrite=True, keep_original_filenames=True, get_original_url_width_height=False)
+    # portal_test.format_yolo(overwrite=True, keep_original_filenames=True, get_original_url_width_height=False)
     
     
