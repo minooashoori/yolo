@@ -1,3 +1,15 @@
+# Img2Dataset ---------------------------------
+opencv-python-headless>=4.5.5.62,<5
+fire>=0.4.0,<0.5.0
+webdataset>=0.2.5,<0.3
+pyarrow>=6.0.1,<10.1.0
+exifread-nocycle>=3.0.1,<4
+dataclasses>=0.6,<1.0.0
+wandb>=0.12.10,<0.13
+fsspec==2022.11.0
+reps/reqs/img2dataset-1.41.0-py3-none-any.whl
+
+
 # Base ----------------------------------------
 matplotlib>=3.2.2
 numpy>=1.22.2 # pinned by Snyk to avoid a vulnerability
@@ -17,7 +29,7 @@ tqdm>=4.64.0
 # comet
 
 # Plotting ------------------------------------
-pandas>=1.1.4
+pandas>=1.1.5,<2
 seaborn>=0.11.0
 
 # Export --------------------------------------
@@ -37,6 +49,8 @@ psutil  # system utilization
 py-cpuinfo  # display CPU info
 thop>=0.1.1  # FLOPs computation
 ipython  # interactive notebook
-albumentations>=1.0.3  # training augmentations
+albumentations>=1.1.0,<2
 # pycocotools>=2.0.6  # COCO mAP
-# roboflow
+
+
+
