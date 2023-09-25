@@ -1,6 +1,6 @@
 import os
 import sys
-sys.path.append(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),"img2dataset"))
+# sys.path.append("/home/ec2-user/dev/ctx-logoface-detector/img2dataset")
 
 import img2dataset as i2d
 import webdataset as wds
@@ -10,7 +10,7 @@ import glob
 import random
 import json
 
-from utils.boxes import plot_boxes
+from fusiondetector.utils.boxes import plot_boxes
 from torch.utils.data import DataLoader
 
 os.environ['AWS_PROFILE'] = 'saml'
@@ -292,14 +292,14 @@ if  __name__ == "__main__":
     # tfusion_train.format_yolo()
 
 
-    # logodet3k_val = LogoDet3KDataset(
-    #     split="val",
-    #     input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/val/"
-    # )
-    # logodet3k_val.download(input_format="parquet",
-    #                        url_col="uri",
-    #                        overwrite=False)
-    # logodet3k_val.format_yolo()
+    logodet3k_val = LogoDet3KDataset(
+        split="val",
+        input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/val/"
+    )
+    logodet3k_val.download(input_format="parquet",
+                           url_col="uri",
+                           overwrite=False)
+    logodet3k_val.format_yolo()
 
     # logodet3k_train = LogoDet3KDataset(
     #     split="train",

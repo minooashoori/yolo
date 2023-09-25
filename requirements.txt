@@ -7,6 +7,7 @@ exifread-nocycle>=3.0.1,<4
 dataclasses>=0.6,<1.0.0
 wandb>=0.12.10,<0.13
 fsspec==2022.11.0
+s3fs
 repos/reqs/img2dataset-1.41.0-py3-none-any.whl
 
 
