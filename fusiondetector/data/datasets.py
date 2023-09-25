@@ -266,6 +266,12 @@ class PortalDataset(ImageDataset):
         super().__init__(split, input_path)
         self.name = "portal"
 
+class PortalDataset(ImageDataset):
+
+    def __init__(self, split: str, input_path: str) -> None:
+        super().__init__(split, input_path)
+        self.name = "newfusion"
+
 
 if  __name__ == "__main__":
 
@@ -366,3 +372,12 @@ if  __name__ == "__main__":
     # portal_test.format_yolo(overwrite=True, keep_original_filenames=True, get_original_url_width_height=False)
     
     
+    new_fusion_train = NewFusionDataset(
+        split="train",
+        input_path = "s3://mls.us-east-1.innovation/pdacosta/data/fusion/annotations/parquet/logo_05/train/",
+    )
+    new_fusion_train.download(input_format="parquet",
+                                url_col="s3_uri",
+                                annotation_col="yolo_annotations",
+                                overwrite=True)
+    new_fusion_train.format_yolo(overwrite=True)

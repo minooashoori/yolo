@@ -483,7 +483,7 @@ if __name__ == '__main__':
 
 
     bs = 3
-    img_path = os.path.join(IMAGES_DIR, "ronaldinho.jpg")
+    img_path = os.path.join(IMAGES_DIR, "dog.png")
     model_path = os.path.join(ARTIFACTS_DIR, "yolov8m_t0_epoch4.torchscript")
     device = "cuda"
     imgsz = 416

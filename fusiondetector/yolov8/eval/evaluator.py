@@ -24,14 +24,13 @@ def load_image_files(folder):
     return [file for file in glob.glob(os.path.join(folder, "*")) if file.endswith(image_extensions)]
 
 def process_image(args, res, c_):
-    pil_images = []
+
     content = ""
 
     if args.show:
         im_array = res.plot()
         im = Image.fromarray(im_array[..., ::-1])
-        pil_images.append(im)
-
+        
     cl = res.boxes.cls.to("cpu").tolist()
     conf = res.boxes.conf.to("cpu").tolist()
     boxes_xywh = res.boxes.xywh.to("cpu").tolist()
@@ -42,7 +41,7 @@ def process_image(args, res, c_):
             xywh = [int(round(x)) for x in xywh]
             content += f"{str(int(c))} {round(b, 2)} {xywh[0]} {xywh[1]} {xywh[2]} {xywh[3]}\n"
 
-    return pil_images, content
+    return im, content
 
 def inference(args):
     c_ = map_class(args.c)
@@ -62,8 +61,10 @@ def inference(args):
 
     pbar = tqdm(total=n_files, unit="images")
     count = 0
+    img_list = []
     for res in results:
-        img_list, content = process_image(args, res, c_)
+        im, content = process_image(args, res, c_)
+        img_list.append(im)
 
         filename = os.path.splitext(os.path.basename(res.path))[0]
 
@@ -77,7 +78,7 @@ def inference(args):
         # do this for 5 batches of 25 images
         batch_size = 25
         num_batches = 5
-        for batch_idx in range(num_batches + 1):
+        for batch_idx in range(num_batches):
             start_idx = batch_idx * batch_size
             end_idx = start_idx + batch_size
             batch_images = img_list[start_idx:end_idx]
@@ -97,7 +98,7 @@ def inference(args):
                         img = img.resize((cell_size, cell_size))
                         grid.paste(img, (col * cell_size, row * cell_size))
 
-            pred_path = os.path.join(OUTPUTS_DIR, f"predictions_{batch_idx}.jpg")
+            pred_path = os.path.join(OUTPUTS_DIR, f"predictions_{batch_idx+1}.jpg")
             grid.save(pred_path)
             print(f"Saved sample predictions to {pred_path}")
 
