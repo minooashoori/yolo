@@ -1,5 +1,5 @@
-from BoundingBox import *
-from utils import *
+from fusiondetector.metrics.BoundingBox import *
+from fusiondetector.metrics.utils import *
 
 
 class BoundingBoxes:

@@ -5,11 +5,11 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import numpy as np
 
-from BoundingBox import *
-from BoundingBoxes import *
-from utils import *
-from utils import BBFormat, BBType
-from Evaluator import Evaluator
+from fusiondetector.metrics.BoundingBox import *
+from fusiondetector.metrics.BoundingBoxes import *
+from fusiondetector.metrics.utils import *
+from fusiondetector.metrics.utils import BBFormat, BBType
+from fusiondetector.metrics.Evaluator import Evaluator
 
 
 

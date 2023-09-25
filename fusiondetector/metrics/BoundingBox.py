@@ -1,4 +1,4 @@
-from utils import *
+from fusiondetector.metrics.utils import *
 
 
 class BoundingBox:
