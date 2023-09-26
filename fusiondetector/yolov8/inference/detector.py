@@ -68,7 +68,7 @@ class FusionDetector:
         self,
         model_path: str,
         conf_thrs: Union[dict, float] = None,
-        box_min_perc: float = 0.01,
+        box_min_perc: Union[float, List] = 0.01,
         batch_size: int = -1,
         fp16: bool = True,
         device: str = "cuda:0",
@@ -85,11 +85,14 @@ class FusionDetector:
         # load the model and metadata
         self.model, self.metadata = self._load_jit(model_path, self.device, self.fp16)
 
+        # read the metadata
         self.nc = self.metadata["nc"]
-        self.ids = self.metadata["ids"]
-        self.names = self.metadata["names"]
+        self.ids = {int(k): v for k, v in self.metadata["ids"].items()} # convert keys to int
+        self.names = {int(k): v for k, v in self.metadata["names"].items()} # convert keys to int
         self.imgsz = self.metadata["imgsz"][0]
         self.default_thrs = self.metadata["default_thrs"]
+
+        print(f"Fusion Model - Classes: {self.nc}, Names: {self.names}, Image Size: {self.imgsz}, Ids: {self.ids}")
 
         # check confidence thresholds
         self.conf_thrs = self._check_thresholds(conf_thrs)
@@ -181,6 +184,7 @@ class FusionDetector:
         if not all([0.0 <= t <= 1.0 for t in conf_thrs]):
             raise ValueError(f"Confidence threshold must be between 0.0 and 1.0, got {conf_thrs}")
 
+        print(conf_thrs)
         # extract the list of thresholds
         return conf_thrs
 
@@ -197,14 +201,14 @@ class FusionDetector:
         """
 
         # logger.info("Warming up the detector model...")
-        # print("Warming up the detector model...")
+        print("Warming up the detector model...")
         im = np.array(np.random.uniform(0, 255, [self.imgsz, self.imgsz, 3]), dtype=np.float32)
 
         im = [im for _ in range(self.batch_size)] if self.batch_size > 1 else [im]
 
         self.detect(im)
         # logger.info("Warmup finished.")
-        # print("Warmup finished.")
+        print("Warmup finished.")
 
     def detect(self, ims: List[np.ndarray], original_shapes: List[List[int]] = None) -> List[List[Union[List[float], bytes, float]]]:
         """
@@ -392,7 +396,11 @@ class FusionDetector:
             results.append(res)
         return results
 
-    def _ensure_min_size(self, frames, boxes, scores, labels) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _ensure_min_size(self,
+                        frames:torch.Tensor,
+                        boxes:torch.Tensor,
+                        scores:torch.Tensor,
+                        labels:torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
 
         """
         Ensure that the normalized bounding boxes are at least a certain percentage of the image size.
@@ -407,11 +415,26 @@ class FusionDetector:
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: A tuple with tensors filtered to remove boxes below the minimum size threshold.
         """
 
-
-        box_size_select = torch.logical_and(
-            (boxes[:, 2] - boxes[:, 0]) > self.box_min_perc, # width
-            (boxes[:, 3] - boxes[:, 1]) > self.box_min_perc, # height
-        )
+        if isinstance(self.box_min_perc, float):
+            box_size_select = torch.logical_and(
+                (boxes[:, 2] - boxes[:, 0]) > self.box_min_perc, # width
+                (boxes[:, 3] - boxes[:, 1]) > self.box_min_perc, # height
+            )
+        if isinstance(self.box_min_perc, list):
+            assert len(self.box_min_perc) == self.nc, f"Box min percentage must be a list of length {self.nc} got {len(self.box_min_perc)}"
+            
+            print(self.box_min_perc)
+            print(frames)
+            print(boxes)
+            print(labels)
+            box_min_percs = torch.tensor(self.box_min_perc).to(frames.device)
+            print(box_min_percs[labels])
+            
+            box_size_select = torch.logical_and(
+                (boxes[:, 2] - boxes[:, 0]) > box_min_percs[labels], # width
+                (boxes[:, 3] - boxes[:, 1]) > box_min_percs[labels], # height
+            )
+            print(box_size_select)
 
         return self._filter(box_size_select, frames, boxes, scores, labels)
 
@@ -490,47 +513,47 @@ if __name__ == '__main__':
 
 
     bs = 3
-    img_path = os.path.join(IMAGES_DIR, "monkey.png")
+    img_path = os.path.join(IMAGES_DIR, "r9.png")
     # model_path = os.path.join(ARTIFACTS_DIR, "yolov8m_t0_epoch4.torchscript")
     model_path = "/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.torchscript"
     device = "cpu"
     imgsz = 416
 
     # Import and initialize the FusionFaceLogoDetector class with the specified model path and device.
-    detector = FusionDetector(model_path=model_path, device=device, batch_size=bs)
+    detector = FusionDetector(model_path=model_path, device=device, batch_size=bs, box_min_perc=[0.01, 0.08])
 
 
-    # # Open the input image, convert it to RGB, and convert it to a numpy array.
-    # img = np.array(Image.open(img_path).convert("RGB"))
+    # Open the input image, convert it to RGB, and convert it to a numpy array.
+    img = np.array(Image.open(img_path).convert("RGB"))
 
-    # # Store a copy of the original image and its dimensions.
-    # orig_img, orig_w, orig_h = img, img.shape[1], img.shape[0]
-    # # Store the original shape of the image.
-    # orig_shape = [orig_h, orig_w]
+    # Store a copy of the original image and its dimensions.
+    orig_img, orig_w, orig_h = img, img.shape[1], img.shape[0]
+    # Store the original shape of the image.
+    orig_shape = [orig_h, orig_w]
 
-    # img = Resizer(target_size=imgsz).resize(img)
+    img = Resizer(target_size=imgsz).resize(img)
 
-    # # Create a black image with dimensions 416x416x3.
-    # black_img = np.zeros((imgsz, imgsz, 3)).astype(np.uint8)
+    # Create a black image with dimensions 416x416x3.
+    black_img = np.zeros((imgsz, imgsz, 3)).astype(np.uint8)
 
-    # # Create a list containing black and original images.
-    # img = [black_img] * (bs-1) + [img]
+    # Create a list containing black and original images.
+    img = [black_img] * (bs-1) + [img]
 
-    # # Create a list containing the original shapes
-    # orig_shapes = [[imgsz, imgsz] for _ in range(bs-1)] + [orig_shape]
+    # Create a list containing the original shapes
+    orig_shapes = [[imgsz, imgsz] for _ in range(bs-1)] + [orig_shape]
 
-    # # Use the detector to perform object detection on the list of images.
-    # detections = detector.detect(img, orig_shapes)
-    # pp.pprint(detections)
+    # Use the detector to perform object detection on the list of images.
+    detections = detector.detect(img, orig_shapes)
+    pp.pprint(detections)
 
-    # # Extract the last image (the original size image) and its detected boxes.
-    # img, boxes = img[-1], detections[-1]
+    # Extract the last image (the original size image) and its detected boxes.
+    img, boxes = img[-1], detections[-1]
 
-    # # Create a modified list of boxes, marking boxes with label '90020' as '1' and others as '0'.
-    # only_boxes = [[1 if box[1] == b'90020' else 0] + box[0] for box in boxes]
+    # Create a modified list of boxes, marking boxes with label '90020' as '1' and others as '0'.
+    only_boxes = [[1 if box[1] == b'90020' else 0] + box[0] for box in boxes]
 
-    # # Extract the scores of the detected boxes.
-    # scores = [box[2] for box in boxes]
+    # Extract the scores of the detected boxes.
+    scores = [box[2] for box in boxes]
 
-    # # Plot the boxes on the original image, saving the result as an image file.
-    # plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores=scores, output_dir = OUTPUTS_DIR)
+    # Plot the boxes on the original image, saving the result as an image file.
+    plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores=scores, output_dir = OUTPUTS_DIR)
