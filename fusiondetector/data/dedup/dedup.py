@@ -38,7 +38,7 @@ def dedup(image_dir: str, label_dir: str= None):
     img_paths_to_remove = [os.path.join(image_dir, path) for path in images_to_remove]
     label_paths_to_remove = [os.path.join(label_dir, path.replace(".jpg", ".txt")) for path in images_to_remove] if label_dir is not None else None
 
-c
+
     # Remove the duplicate images/labels
     for file_path in img_paths_to_remove:
         os.remove(file_path)

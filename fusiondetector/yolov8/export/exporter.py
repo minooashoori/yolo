@@ -4,6 +4,7 @@ import os
 sys.path.append("/home/ec2-user/dev/ctx-logoface-detector/ultralytics")
 from ultralytics import YOLO
 import torch
+import yaml
 
 class Exporter:
 
@@ -39,7 +40,8 @@ class Exporter:
         device:str="0",
         half:bool=True,
         dynamic:bool=False,
-        batch:int=32):
+        batch:int=32,
+        metadata:dict=None):
 
         self.model.export(format=format,
                         simplify=simplify,
@@ -47,17 +49,18 @@ class Exporter:
                         half=half,
                         dynamic=dynamic,
                         batch=batch,
-                        metadata={"imgsz": 416, "nc": 2}
+                        metadata=metadata,
                         )
 
 
 
 if __name__ == "__main__":
-    detect = Exporter()
-    # detect.load("/home/ec2-user/dev/yolo/runs/detect/train51/weights/epoch59.pt")
-    detect.load("/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.pt")
-    detect.export(format="torchscript", half=True, dynamic=False, batch=32, device="cuda", simplify=True)
-    # detect.export(format="onnx", half=True, dynamic=False, batch=32, device="0", simplify=True)
-    # detect.export(format="engine", half=True, dynamic=False, batch=32, device="0", simplify=True)
-    # res = detect.predict("/home/ec2-user/dev/ctx-logoface-detector/metrics/Screenshot 2023-09-14 at 10.37.23.png")
-    # print(res)
+    import os
+    # read yaml metadata as dict
+    with open("/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/yolov8/export/metadata/yolov8s.yaml", 'r') as stream:
+        metadata = yaml.safe_load(stream)
+    print(metadata)
+    exporter = Exporter()
+    exporter.load("/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.pt")
+    exporter.export(format="torchscript", half=True, dynamic=False, batch=32, device="cuda", simplify=True, metadata=metadata)
+

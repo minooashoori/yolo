@@ -238,7 +238,7 @@ class Exporter:
             'names': model.names}  # model metadata
         if metadata:
             self.metadata.update(metadata)
-        print("new metadata", self.metadata)
+        print("Model Metadata", self.metadata)
         if model.task == 'pose':
             self.metadata['kpt_shape'] = model.model[-1].kpt_shape
 
