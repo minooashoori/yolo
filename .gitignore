@@ -165,4 +165,5 @@ wandb/
 .DS_Store
 .idea/
 *.pt
+outputs/*.jpg
 ```

@@ -169,6 +169,9 @@ def undersample_faces(df, seed=42, prop=0.6, use_pseudo_labels=False):
     df = df.withColumn("has_logo", F.when(F.size(F.col("boxes")) > 0, 1).otherwise(0))
 
     if use_pseudo_labels:
+        # check if "pseudo_boxes" column exists
+        if "pseudo_boxes" not in df.columns:
+            raise ValueError("pseudo_boxes column not found in DataFrame")
         df = df.withColumn("has_pseudologo", F.when(F.size(F.col("pseudo_boxes")) > 0, 1).otherwise(0))
         df_face = df.filter((F.col("has_face") == 1) & (F.col("has_pseudologo") == 0))
     else:

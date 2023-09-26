@@ -266,7 +266,7 @@ class PortalDataset(ImageDataset):
         super().__init__(split, input_path)
         self.name = "portal"
 
-class PortalDataset(ImageDataset):
+class NewFusionDataset(ImageDataset):
 
     def __init__(self, split: str, input_path: str) -> None:
         super().__init__(split, input_path)

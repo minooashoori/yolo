@@ -119,8 +119,8 @@ class MergeImgDataset:
 if __name__ == "__main__":
 
     merge = MergeImgDataset(
-        datasetA_path="/home/ec2-user/dev/data/logo05fusion/yolo",
-        datasetB_path="/home/ec2-user/dev/data/manual/project1",
-        output_folder="/home/ec2-user/dev/data/logo05fusionplusmanual/yolo")
+        datasetA_path="/home/ec2-user/dev/data/newfusion/merge/yolo_manual",
+        datasetB_path="/home/ec2-user/dev/data/logodet3k/yolo",
+        output_folder="/home/ec2-user/dev/data/newfusion_logodet3k")
 
     merge.merge(splits=["train", "val"], includeA=["train", "val"], includeB=["train"])

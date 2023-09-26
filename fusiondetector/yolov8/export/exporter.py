@@ -54,7 +54,7 @@ class Exporter:
 if __name__ == "__main__":
     detect = Exporter()
     # detect.load("/home/ec2-user/dev/yolo/runs/detect/train51/weights/epoch59.pt")
-    detect.load("/home/ec2-user/dev/ctx-logoface-detector/artifacts/test.pt")
+    detect.load("/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.pt")
     detect.export(format="torchscript", half=True, dynamic=False, batch=32, device="cuda", simplify=True)
     # detect.export(format="onnx", half=True, dynamic=False, batch=32, device="0", simplify=True)
     # detect.export(format="engine", half=True, dynamic=False, batch=32, device="0", simplify=True)

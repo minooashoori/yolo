@@ -23,11 +23,11 @@ def load_image_files(folder):
     image_extensions = (".jpg", ".png")
     return [file for file in glob.glob(os.path.join(folder, "*")) if file.endswith(image_extensions)]
 
-def process_image(args, res, c_):
+def process_image(show, res, c_):
 
     content = ""
 
-    if args.show:
+    if show:
         im_array = res.plot()
         im = Image.fromarray(im_array[..., ::-1])
         
@@ -51,6 +51,7 @@ def inference(args):
 
     model = YOLO(args.model)
     results = model(args.imgs, stream=True, conf=0.01, verbose=False, half=True, device="cuda:0")
+    show = args.show
 
     os.makedirs(args.det, exist_ok=True)
     files = load_image_files(args.imgs)
@@ -63,7 +64,7 @@ def inference(args):
     count = 0
     img_list = []
     for res in results:
-        im, content = process_image(args, res, c_)
+        im, content = process_image(show, res, c_)
         img_list.append(im)
 
         filename = os.path.splitext(os.path.basename(res.path))[0]
@@ -109,22 +110,25 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="/home/ec2-user/dev/yolo/saved/yolov8m_t0_epoch4.pt")
-    parser.add_argument("--imgs", type=str, default="/home/ec2-user/dev/data/logo05/yolo/images/test")
-    parser.add_argument("--gt", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/gts")
-    parser.add_argument("--det", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolov8m_t0")
-    parser.add_argument("--c", type=str, default="logo")
+    parser.add_argument("--model", type=str, default="/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.pt")
+    # parser.add_argument("--imgs", type=str, default="/home/ec2-user/dev/data/logo05/yolo/images/test")
+    parser.add_argument("--imgs", type=str, default="/home/ec2-user/dev/data/widerface/unzip/val")
+    # parser.add_argument("--gt", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/gts")
+    parser.add_argument("--gt", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/gts")
+    # parser.add_argument("--det", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolov8s_t7")
+    parser.add_argument("--det", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/preds_yolov8s_t7")
+    parser.add_argument("--c", type=str, default="face")
     parser.add_argument("--show", action="store_true", default=True)
-    parser.add_argument("--conf", type=float, default=0.15)
-    parser.add_argument("--iou", type=float, default=0.45)
+    parser.add_argument("--conf", type=float, default=0.4)
+    parser.add_argument("--iou", type=float, default=0.6)
     args = parser.parse_args()
 
     main(args)
 
-    # pascalvoc_parser = pascalvoc.parser
-    # pascalvoc_args_input = ["-gt", args.gt, "-det", args.det, "-conf", str(args.conf), "-t", str(args.iou)]
+    pascalvoc_parser = pascalvoc.parser
+    pascalvoc_args_input = ["-gt", args.gt, "-det", args.det, "-conf", str(args.conf), "-t", str(args.iou)]
 
-    # pascalvoc_args = pascalvoc_parser.parse_args(pascalvoc_args_input)
+    pascalvoc_args = pascalvoc_parser.parse_args(pascalvoc_args_input)
 
-    # pascalvoc.main(pascalvoc_args)
-    # print("end")
+    pascalvoc.main(pascalvoc_args)
+
