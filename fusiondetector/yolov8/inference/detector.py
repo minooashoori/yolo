@@ -77,7 +77,7 @@ class FusionFaceLogoDetector:
         # set the ids, names and default threshold
         self.ids = {0: "134533", 1: "90020"}
         self.names = {0: "face", 1: "logo"}
-        self.default_thrs = {134533: 0.4, 90020: 0.1}
+        self.default_thrs = {134533: 0.35, 90020: 0.1}
 
         jit = Path(model_path).suffix[1:] == "torchscript"
         if not jit:
@@ -483,7 +483,7 @@ if __name__ == '__main__':
 
 
     bs = 3
-    img_path = os.path.join(IMAGES_DIR, "nestle.png")
+    img_path = os.path.join(IMAGES_DIR, "monkey.png")
     # model_path = os.path.join(ARTIFACTS_DIR, "yolov8m_t0_epoch4.torchscript")
     model_path = "/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.torchscript"
     device = "cpu"
