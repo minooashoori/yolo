@@ -67,8 +67,8 @@ class FusionDetector:
     def __init__(
         self,
         model_path: str,
-        conf_thrs: Union[dict, float] = None,
-        box_min_perc: Union[float, List] = 0.01,
+        conf_thrs: Union[dict, float, list] = None,
+        box_min_perc: Union[float, list] = 0.01,
         batch_size: int = -1,
         fp16: bool = True,
         device: str = "cuda:0",
@@ -151,21 +151,22 @@ class FusionDetector:
 
         # if it's a float, then just output the list of floats
         if isinstance(conf_thrs, float):
-            # check if it's a valid float
-            if not 0.0 <= conf_thrs <= 1.0:
-                raise ValueError(f"Confidence threshold must be between 0.0 and 1.0, got {conf_thrs}")
+            conf_thrs = [conf_thrs for _ in range(self.nc)]
 
-            return [conf_thrs for _ in range(self.nc)]
+        elif isinstance(conf_thrs, list):
+            # check if it's a valid list
+            if not len(conf_thrs) == self.nc:
+                raise ValueError(f"Confidence threshold list must be of length {self.nc}, got {len(conf_thrs)}")
 
-        # get the names from self.names
-        # order the names by their keys, should be 0, 1,...
-        names = [str(self.names[k]).lower() for k in sorted(self.names.keys())]
+        elif isinstance(conf_thrs, dict):
 
-        # create two lists from the ids: one with the ids as strings one as ints, sorted by the keys
-        ids_str = [str(self.ids[k]) for k in sorted(self.ids.keys())]
-        ids_int = [int(id_) for id_ in ids_str]
+            # get the names from self.names
+            # order the names by their keys, should be 0, 1,...
+            names = [str(self.names[k]).lower() for k in sorted(self.names.keys())]
 
-        if isinstance(conf_thrs, dict):
+            # create two lists from the ids: one with the ids as strings one as ints, sorted by the keys
+            ids_str = [str(self.ids[k]) for k in sorted(self.ids.keys())]
+            ids_int = [int(id_) for id_ in ids_str]
 
             if set(conf_thrs.keys()) == set(names): # case when names are passed
                 conf_thrs = [conf_thrs[n] for n in names]
@@ -178,7 +179,11 @@ class FusionDetector:
                 raise NotImplementedError(f"Confidence thresholds keys must be: {names}, {ids_int} got {set(conf_thrs.keys())}")
 
         else:
+
             raise NotImplementedError(f"Confidence thresholds must be either a float, a dict or None, got {type(conf_thrs)}")
+
+        # sanity check, is it list?
+        assert isinstance(conf_thrs, list), f"Confidence thresholds must be a list, got {type(conf_thrs)}"
 
         # check if the values are valid
         if not all([0.0 <= t <= 1.0 for t in conf_thrs]):
@@ -520,7 +525,7 @@ if __name__ == '__main__':
     imgsz = 416
 
     # Import and initialize the FusionFaceLogoDetector class with the specified model path and device.
-    detector = FusionDetector(model_path=model_path, device=device, batch_size=bs, box_min_perc=[0.01, 0.08])
+    detector = FusionDetector(model_path=model_path, device=device, batch_size=bs, box_min_perc=[0.25, 0.01])
 
 
     # Open the input image, convert it to RGB, and convert it to a numpy array.
