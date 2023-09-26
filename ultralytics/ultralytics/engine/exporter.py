@@ -147,7 +147,7 @@ class Exporter:
         callbacks.add_integration_callbacks(self)
 
     @smart_inference_mode()
-    def __call__(self, model=None):
+    def __call__(self, model=None, metadata=None):
         """Returns list of exported files/dirs after running callbacks."""
         self.run_callbacks('on_export_start')
         t = time.time()
@@ -236,6 +236,9 @@ class Exporter:
             'batch': self.args.batch,
             'imgsz': self.imgsz,
             'names': model.names}  # model metadata
+        if metadata:
+            self.metadata.update(metadata)
+        print("new metadata", self.metadata)
         if model.task == 'pose':
             self.metadata['kpt_shape'] = model.model[-1].kpt_shape
 

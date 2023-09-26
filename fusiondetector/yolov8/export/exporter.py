@@ -46,7 +46,8 @@ class Exporter:
                         device=device,
                         half=half,
                         dynamic=dynamic,
-                        batch=batch
+                        batch=batch,
+                        metadata={"imgsz": 416, "nc": 2}
                         )
 
 

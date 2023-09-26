@@ -26,7 +26,6 @@ def xywh2xyxy(x):
 
 
 
-
 def non_max_suppression(
         prediction,
         conf_thres=0.0,
