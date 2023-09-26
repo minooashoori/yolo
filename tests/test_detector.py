@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from fusiondetector.yolov8.inference.detector import FusionFaceLogoDetector  # Assuming your class is in a file named fusion_face_logo_detector.py
+from fusiondetector.yolov8.inference.detector import FusionDetector  # Assuming your class is in a file named fusion_face_logo_detector.py
 import torch
 
 class TestFusionFaceLogoDetector(unittest.TestCase):
@@ -18,12 +18,12 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
         for model_path in model_paths:
             with self.subTest(model_path=model_path):
                 with self.assertRaises(NotImplementedError):
-                    FusionFaceLogoDetector(model_path=model_path)
+                    FusionDetector(model_path=model_path)
 
     def test_empty_model_path(self):
         # Test initializing the detector with an empty model path
         with self.assertRaises(TypeError):
-            FusionFaceLogoDetector(model_path=None)
+            FusionDetector(model_path=None)
 
     def test_valid_model_paths(self):
         # Test initializing the detector with valid model paths
@@ -32,22 +32,22 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
         ]
         for model_path in model_paths:
             with self.subTest(model_path=model_path):
-                detector = FusionFaceLogoDetector(model_path=model_path)
+                detector = FusionDetector(model_path=model_path)
                 self.assertIsNotNone(detector)
 
 
     def test_invalid_confidence_thresholds(self):
         # Test initializing the detector with invalid confidence thresholds
         with self.assertRaises(NotImplementedError):
-            FusionFaceLogoDetector("valid_model.torchscript", conf_thrs={"facesss": 0.5, "logos": 0.6})
+            FusionDetector("valid_model.torchscript", conf_thrs={"facesss": 0.5, "logos": 0.6})
         with self.assertRaises(NotImplementedError):
-            FusionFaceLogoDetector("valid_model.torchscript", conf_thrs={"face": 0.5, "logo": 0.6, "invalid": 1.2})
+            FusionDetector("valid_model.torchscript", conf_thrs={"face": 0.5, "logo": 0.6, "invalid": 1.2})
         with self.assertRaises(ValueError):
-            FusionFaceLogoDetector("valid_model.torchscript", conf_thrs={"face": 1.5, "logo": 0.6})
+            FusionDetector("valid_model.torchscript", conf_thrs={"face": 1.5, "logo": 0.6})
 
     def test_initialize_on_cpu(self):
         # Test initializing the detector on CPU
-        detector = FusionFaceLogoDetector(
+        detector = FusionDetector(
             model_path=self.real_model_path,
             conf_thrs={"face": 0.5, "logo": 0.6},
             device="cpu"  # Initialize on CPU
@@ -60,7 +60,7 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
 
     def setUp(self):
         # Initialize the detector with a sample TorchScript model (provide the actual path)
-        self.detector = FusionFaceLogoDetector(model_path=self.real_model_path)
+        self.detector = FusionDetector(model_path=self.real_model_path)
 
     def test_initialization(self):
         # Test the initialization of the detector
@@ -152,7 +152,7 @@ class TestFusionFaceLogoDetector(unittest.TestCase):
 
     def test_detect_cpu(self):
         # set the model to CPU
-        detector = FusionFaceLogoDetector(model_path=self.real_model_path, device="cpu")
+        detector = FusionDetector(model_path=self.real_model_path, device="cpu")
         sample_image = np.random.uniform(0, 255, [self.detector.imgsz, self.detector.imgsz, 3]).astype(np.float32)
         detections = detector.detect([sample_image])
 

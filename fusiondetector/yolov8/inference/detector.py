@@ -43,7 +43,7 @@ class Resizer:
         else:
             return image.astype(np.uint8)
 
-class FusionFaceLogoDetector:
+class FusionDetector:
 
     """
     Detector class for object detection of faces and logos using a TorchScript model.
@@ -74,18 +74,9 @@ class FusionFaceLogoDetector:
         device: str = "cuda:0",
         max_det: int = 100,
     ):
-        # set the ids, names and default threshold
-        self.ids = {0: "134533", 1: "90020"}
-        self.names = {0: "face", 1: "logo"}
-        self.default_thrs = {134533: 0.35, 90020: 0.1}
-
         jit = Path(model_path).suffix[1:] == "torchscript"
         if not jit:
             raise NotImplementedError(f'Model path suffix must be .torchscript got {model_path}')
-
-        # check confidence thresholds
-        self.conf_thrs = self._check_thresholds(conf_thrs)
-        # print(f"Confidence thresholds: {self.conf_thrs}")
 
         # set the device and fp16
         self.device = torch.device(device if torch.cuda.is_available() and device != 'cpu' else 'cpu')
@@ -93,12 +84,19 @@ class FusionFaceLogoDetector:
 
         # load the model and metadata
         self.model, self.metadata = self._load_jit(model_path, self.device, self.fp16)
-        # pp.pprint(self.metadata)
+
+        self.nc = self.metadata["nc"]
+        self.ids = self.metadata["ids"]
+        self.names = self.metadata["names"]
+        self.imgsz = self.metadata["imgsz"][0]
+        self.default_thrs = self.metadata["default_thrs"]
+
+        # check confidence thresholds
+        self.conf_thrs = self._check_thresholds(conf_thrs)
 
         # check the batch size  - batch size cannot be 0 or lower than -1
         self.batch_size = batch_size if batch_size > 0 or batch_size == -1 else 1
 
-        self.imgsz = 416
         self.box_min_perc = box_min_perc
         self.max_det = max_det
 
@@ -140,9 +138,9 @@ class FusionFaceLogoDetector:
             conf_thrs (Union[dict, float]): Confidence thresholds can have 3 formats:
                 1. None
                 2. float
-                3. Dictionary with keys 134533 and 90020, "134533" and "90020" or face and logo
+                3. Dictionary with keys as ids or names and values as floats.
         Returns:
-            List[float]: List of confidence threshold values in the order [face, logo].
+            List[float]: List of confidence threshold values in the order 0,1,2...
         Raises:
             NotImplementedError: If the input format is not supported.
         """
@@ -154,22 +152,31 @@ class FusionFaceLogoDetector:
             if not 0.0 <= conf_thrs <= 1.0:
                 raise ValueError(f"Confidence threshold must be between 0.0 and 1.0, got {conf_thrs}")
 
-            return [conf_thrs for _ in range(2)]
+            return [conf_thrs for _ in range(self.nc)]
 
-        elif isinstance(conf_thrs, dict):
+        # get the names from self.names
+        # order the names by their keys, should be 0, 1,...
+        names = [str(self.names[k]).lower() for k in sorted(self.names.keys())]
 
-            # if the keys are face and logo, convert them to 134533 and 90020
-            if set(conf_thrs.keys()) == set(["face", "logo"]):
+        # create two lists from the ids: one with the ids as strings one as ints, sorted by the keys
+        ids_str = [str(self.ids[k]) for k in sorted(self.ids.keys())]
+        ids_int = [int(id_) for id_ in ids_str]
 
-                conf_thrs = [conf_thrs["face"], conf_thrs["logo"]]
-            elif set(conf_thrs.keys()) in [set(["134533", "90020"]),set([134533, 90020])]:
-                # set key to int
-                conf_thrs = {int(k): v for k, v in conf_thrs.items()}
-                conf_thrs = [conf_thrs[134533], conf_thrs[90020]]
+        if isinstance(conf_thrs, dict):
+
+            if set(conf_thrs.keys()) == set(names): # case when names are passed
+                conf_thrs = [conf_thrs[n] for n in names]
+
+            elif set(conf_thrs.keys()) in [set(ids_str),set(ids_int)]: # case when ids are passed
+                conf_thrs = {int(k): v for k, v in conf_thrs.items()} # convert keys to int
+                conf_thrs = [conf_thrs[k] for k in ids_int]
+
             else:
-                raise NotImplementedError(f"Confidence thresholds keys must be: [face, logo], [134533, 90020], got {set(conf_thrs.keys())}")
+                raise NotImplementedError(f"Confidence thresholds keys must be: {names}, {ids_int} got {set(conf_thrs.keys())}")
+
         else:
             raise NotImplementedError(f"Confidence thresholds must be either a float, a dict or None, got {type(conf_thrs)}")
+
         # check if the values are valid
         if not all([0.0 <= t <= 1.0 for t in conf_thrs]):
             raise ValueError(f"Confidence threshold must be between 0.0 and 1.0, got {conf_thrs}")
@@ -490,40 +497,40 @@ if __name__ == '__main__':
     imgsz = 416
 
     # Import and initialize the FusionFaceLogoDetector class with the specified model path and device.
-    detector = FusionFaceLogoDetector(model_path=model_path, device=device, batch_size=bs)
+    detector = FusionDetector(model_path=model_path, device=device, batch_size=bs)
 
 
-    # Open the input image, convert it to RGB, and convert it to a numpy array.
-    img = np.array(Image.open(img_path).convert("RGB"))
+    # # Open the input image, convert it to RGB, and convert it to a numpy array.
+    # img = np.array(Image.open(img_path).convert("RGB"))
 
-    # Store a copy of the original image and its dimensions.
-    orig_img, orig_w, orig_h = img, img.shape[1], img.shape[0]
-    # Store the original shape of the image.
-    orig_shape = [orig_h, orig_w]
+    # # Store a copy of the original image and its dimensions.
+    # orig_img, orig_w, orig_h = img, img.shape[1], img.shape[0]
+    # # Store the original shape of the image.
+    # orig_shape = [orig_h, orig_w]
 
-    img = Resizer(target_size=imgsz).resize(img)
+    # img = Resizer(target_size=imgsz).resize(img)
 
-    # Create a black image with dimensions 416x416x3.
-    black_img = np.zeros((imgsz, imgsz, 3)).astype(np.uint8)
+    # # Create a black image with dimensions 416x416x3.
+    # black_img = np.zeros((imgsz, imgsz, 3)).astype(np.uint8)
 
-    # Create a list containing black and original images.
-    img = [black_img] * (bs-1) + [img]
+    # # Create a list containing black and original images.
+    # img = [black_img] * (bs-1) + [img]
 
-    # Create a list containing the original shapes
-    orig_shapes = [[imgsz, imgsz] for _ in range(bs-1)] + [orig_shape]
+    # # Create a list containing the original shapes
+    # orig_shapes = [[imgsz, imgsz] for _ in range(bs-1)] + [orig_shape]
 
-    # Use the detector to perform object detection on the list of images.
-    detections = detector.detect(img, orig_shapes)
-    pp.pprint(detections)
+    # # Use the detector to perform object detection on the list of images.
+    # detections = detector.detect(img, orig_shapes)
+    # pp.pprint(detections)
 
-    # Extract the last image (the original size image) and its detected boxes.
-    img, boxes = img[-1], detections[-1]
+    # # Extract the last image (the original size image) and its detected boxes.
+    # img, boxes = img[-1], detections[-1]
 
-    # Create a modified list of boxes, marking boxes with label '90020' as '1' and others as '0'.
-    only_boxes = [[1 if box[1] == b'90020' else 0] + box[0] for box in boxes]
+    # # Create a modified list of boxes, marking boxes with label '90020' as '1' and others as '0'.
+    # only_boxes = [[1 if box[1] == b'90020' else 0] + box[0] for box in boxes]
 
-    # Extract the scores of the detected boxes.
-    scores = [box[2] for box in boxes]
+    # # Extract the scores of the detected boxes.
+    # scores = [box[2] for box in boxes]
 
-    # Plot the boxes on the original image, saving the result as an image file.
-    plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores=scores, output_dir = OUTPUTS_DIR)
+    # # Plot the boxes on the original image, saving the result as an image file.
+    # plot_boxes(orig_img, boxes=only_boxes, box_type="xyxy", save=True, scores=scores, output_dir = OUTPUTS_DIR)
