@@ -68,7 +68,7 @@ class FusionDetector:
         self,
         model_path: str,
         conf_thrs: Union[dict, float, list] = None,
-        box_min_perc: Union[float, list] = 0.01,
+        box_min_perc: Union[dict, float, list] = 0.01,
         batch_size: int = -1,
         fp16: bool = True,
         device: str = "cuda:0",
@@ -100,8 +100,11 @@ class FusionDetector:
         # check the batch size  - batch size cannot be 0 or lower than -1
         self.batch_size = batch_size if batch_size > 0 or batch_size == -1 else 1
 
-        self.box_min_perc = box_min_perc
+        self.box_min_percs = self._check_min_perc(box_min_perc)
         self.max_det = max_det
+
+        print("Box Min Percs: ", self.box_min_percs)
+        print("Confidence Thresholds: ", self.conf_thrs)
 
         self.warmup() # warmup the model
 
@@ -132,66 +135,90 @@ class FusionDetector:
             metadata = json.loads(extra_files['config.txt'], object_hook=lambda x: dict(x.items()))
         return model, metadata
 
+    def _validate_and_transform_input(self, input_data: Union[dict, list, float], default_data: Union[dict, list, float], input_name: str, bounds:List[float]):
+        """
+        Validates and transforms the input into a list of floats.
 
-    def _check_thresholds(self, conf_thrs: Union[dict, float]) -> List[float]:
+        Args:
+            input_data (Union[dict, list, float]): Input data to be transformed into a list of floats.
+            default_data (Union[dict, list, float]): Default data to be used if input_data is None.
+            input_name (str): Name of the input, used for error messages.
+            bounds (list): List of floats representing the allowable bounds for the input data.
+
+        Returns:
+            list: List of floats in order of classes.
+        """
+
+        # checks
+
+        # Ensure that bounds is of length 2 and that bound[0] < bound[1]
+        assert len(bounds) == 2, f"Bounds must be a list of length 2, got {len(bounds)}"
+        assert bounds[0] < bounds[1], f"Bounds must be in the format [lower, upper], got {bounds}"
+
+        # Ensure that at least default_data is present
+        assert default_data is not None, f"Default data of {input_name} must be provided"
+
+        # check input_data is either a float, list, or dictionary or None
+        assert input_data is None or isinstance(input_data, (float, list, dict)), f"{input_name} must be a float, list, or dictionary, got {type(input_data)}"
+
+        # checks done
+
+        output = input_data if input_data is not None else default_data
+
+        # If the input is a float, create a list of floats with the same value
+        if isinstance(output, float):
+            output = [output] * self.nc
+        # If it's a list, check if it's valid and has the expected length
+        elif isinstance(output, list):
+            if not len(output) == self.nc:
+                raise ValueError(f"{input_name} list must be of length {self.nc}, got {len(output)}")
+        # If it's a dictionary, process it based on specific rules
+        elif isinstance(output, dict):
+            # Get the names from self.names and order them by their keys (0, 1, ...)
+            names = [str(self.names[k]).lower() for k in sorted(self.names.keys())]
+
+            # Create two lists from the ids: one with the ids as strings and one as ints, sorted by the keys
+            ids_str = [str(self.ids[k]) for k in sorted(self.ids.keys())]
+            ids_int = [int(id_) for id_ in ids_str]
+
+            # Case when names are passed
+            if set(output.keys()) == set(names):
+                output = [output[n] for n in names]
+            # Case when ids are passed
+            elif set(output.keys()) in [set(ids_str), set(ids_int)]:
+                output = {int(k): v for k, v in output.items()}  # Convert keys to int
+                output = [output[k] for k in ids_int]
+            else:
+                raise NotImplementedError(f"{input_name} keys must be: {names}, {ids_int} got {set(output.keys())}")
+
+        # Ensure that the values are within the specified bounds
+        if not all([bounds[0] <= t <= bounds[1] for t in output]):
+            raise ValueError(f"{input_name} must be between {bounds[0]} and {bounds[1]}, got {output}")
+
+        return output
+
+
+    def _check_thresholds(self, conf_thrs: Union[dict, float, list]) -> List[float]:
         """
         Check and transform confidence thresholds.
 
         Args:
-            conf_thrs (Union[dict, float]): Confidence thresholds can have 3 formats:
+            conf_thrs (Union[dict, float, list]): Confidence thresholds can have 3 formats:
                 1. None
                 2. float
                 3. Dictionary with keys as ids or names and values as floats.
         Returns:
-            List[float]: List of confidence threshold values in the order 0,1,2...
+            List[float]: List of confidence thresholds values in the order 0,1,2...
         Raises:
             NotImplementedError: If the input format is not supported.
         """
-        conf_thrs = conf_thrs if conf_thrs is not None else self.default_thrs
 
-        # if it's a float, then just output the list of floats
-        if isinstance(conf_thrs, float):
-            conf_thrs = [conf_thrs for _ in range(self.nc)]
+        return self._validate_and_transform_input(conf_thrs, self.default_thrs, "Confidence thresholds", [0.0, 1.0])
 
-        elif isinstance(conf_thrs, list):
-            # check if it's a valid list
-            if not len(conf_thrs) == self.nc:
-                raise ValueError(f"Confidence threshold list must be of length {self.nc}, got {len(conf_thrs)}")
 
-        elif isinstance(conf_thrs, dict):
+    def _check_min_perc(self, box_min_perc: Union[dict, float, list]) -> List[float]:
 
-            # get the names from self.names
-            # order the names by their keys, should be 0, 1,...
-            names = [str(self.names[k]).lower() for k in sorted(self.names.keys())]
-
-            # create two lists from the ids: one with the ids as strings one as ints, sorted by the keys
-            ids_str = [str(self.ids[k]) for k in sorted(self.ids.keys())]
-            ids_int = [int(id_) for id_ in ids_str]
-
-            if set(conf_thrs.keys()) == set(names): # case when names are passed
-                conf_thrs = [conf_thrs[n] for n in names]
-
-            elif set(conf_thrs.keys()) in [set(ids_str),set(ids_int)]: # case when ids are passed
-                conf_thrs = {int(k): v for k, v in conf_thrs.items()} # convert keys to int
-                conf_thrs = [conf_thrs[k] for k in ids_int]
-
-            else:
-                raise NotImplementedError(f"Confidence thresholds keys must be: {names}, {ids_int} got {set(conf_thrs.keys())}")
-
-        else:
-
-            raise NotImplementedError(f"Confidence thresholds must be either a float, a dict or None, got {type(conf_thrs)}")
-
-        # sanity check, is it list?
-        assert isinstance(conf_thrs, list), f"Confidence thresholds must be a list, got {type(conf_thrs)}"
-
-        # check if the values are valid
-        if not all([0.0 <= t <= 1.0 for t in conf_thrs]):
-            raise ValueError(f"Confidence threshold must be between 0.0 and 1.0, got {conf_thrs}")
-
-        print(conf_thrs)
-        # extract the list of thresholds
-        return conf_thrs
+        return self._validate_and_transform_input(box_min_perc, 0.0, "Box min percentage", [0.0, 1.0])
 
 
     def warmup(self) -> None:
@@ -295,7 +322,6 @@ class FusionDetector:
         assert ims.dtype == torch.float16 if self.fp16 else torch.float32
 
         return ims, n_ims
-
 
 
     def _filter(self,
@@ -420,26 +446,14 @@ class FusionDetector:
             Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]: A tuple with tensors filtered to remove boxes below the minimum size threshold.
         """
 
-        if isinstance(self.box_min_perc, float):
-            box_size_select = torch.logical_and(
-                (boxes[:, 2] - boxes[:, 0]) > self.box_min_perc, # width
-                (boxes[:, 3] - boxes[:, 1]) > self.box_min_perc, # height
-            )
-        if isinstance(self.box_min_perc, list):
-            assert len(self.box_min_perc) == self.nc, f"Box min percentage must be a list of length {self.nc} got {len(self.box_min_perc)}"
-            
-            print(self.box_min_perc)
-            print(frames)
-            print(boxes)
-            print(labels)
-            box_min_percs = torch.tensor(self.box_min_perc).to(frames.device)
-            print(box_min_percs[labels])
-            
-            box_size_select = torch.logical_and(
-                (boxes[:, 2] - boxes[:, 0]) > box_min_percs[labels], # width
-                (boxes[:, 3] - boxes[:, 1]) > box_min_percs[labels], # height
-            )
-            print(box_size_select)
+        assert len(self.box_min_percs) == self.nc, f"Box min percentage must be a list of length {self.nc} got {len(self.box_min_percs)}"
+
+        box_min_percs = torch.tensor(self.box_min_percs).to(boxes.device)
+
+        box_size_select = torch.logical_and(
+            (boxes[:, 2] - boxes[:, 0]) > box_min_percs[labels], # width
+            (boxes[:, 3] - boxes[:, 1]) > box_min_percs[labels], # height
+        )
 
         return self._filter(box_size_select, frames, boxes, scores, labels)
 
@@ -518,15 +532,17 @@ if __name__ == '__main__':
 
 
     bs = 3
-    img_path = os.path.join(IMAGES_DIR, "r9.png")
+    img_path = os.path.join(IMAGES_DIR, "bus.jpg")
     # model_path = os.path.join(ARTIFACTS_DIR, "yolov8m_t0_epoch4.torchscript")
     model_path = "/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.torchscript"
-    device = "cpu"
+    device = "cuda"
     imgsz = 416
 
     # Import and initialize the FusionFaceLogoDetector class with the specified model path and device.
-    detector = FusionDetector(model_path=model_path, device=device, batch_size=bs, box_min_perc=[0.25, 0.01])
-
+    detector = FusionDetector(model_path = model_path,
+                            device = device,
+                            batch_size = bs,
+                            box_min_perc = {'logo': 0.01, 'face': 0.02})
 
     # Open the input image, convert it to RGB, and convert it to a numpy array.
     img = np.array(Image.open(img_path).convert("RGB"))

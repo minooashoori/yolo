@@ -12,13 +12,13 @@ import wandb
 # model = YOLO('yolov8s.yaml')
 # model =  YOLO('/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t77_last.pt')
 # model = YOLO('/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t82_best.pt')
-model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train6/weights/last.pt')
+model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.pt')
 
 
 # results = model.train(resume=True)
 
 results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/yolov8/datasets/newfusionlogodet3k.yaml",
-                      epochs=60,
+                      epochs=100,
                       batch=256,
                       imgsz=416,
                       mosaic=True,
@@ -30,7 +30,7 @@ results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/fusiondetec
                     #   warmup_epochs=3,
                       pretrained=True,
                       # lr0=0.00005,# adam
-                      lr0=0.0005, # sgd
+                      # lr0=0.0005, # sgd
                       save_conf=True,
                       save_crop=True,
                       augment=True,
