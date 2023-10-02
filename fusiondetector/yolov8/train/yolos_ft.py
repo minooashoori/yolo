@@ -12,17 +12,19 @@ import wandb
 # model = YOLO('yolov8s.yaml')
 # model =  YOLO('/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t77_last.pt')
 # model = YOLO('/home/ec2-user/dev/ctx-logoface-detector/artifacts/yolov8s_t82_best.pt')
-model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.pt')
+# model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train8/weights/last.pt')
+# model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train11/weights/last.pt')
+model = YOLO('/home/ec2-user/dev/yolo/runs/detect/train12/weights/last.pt')
 
 
 # results = model.train(resume=True)
 
 results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/yolov8/datasets/newfusionlogodet3k.yaml",
-                      epochs=100,
+                      epochs=50,
                       batch=256,
                       imgsz=416,
-                      mosaic=True,
-                      close_mosaic=8,
+                      mosaic=False,
+                      close_mosaic=10,
                       device=[0,1,2,3],
                       workers=32,
                       optimizer="SGD",
@@ -30,7 +32,7 @@ results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/fusiondetec
                     #   warmup_epochs=3,
                       pretrained=True,
                       # lr0=0.00005,# adam
-                      # lr0=0.0005, # sgd
+                      lr0=0.00025, # sgd
                       save_conf=True,
                       save_crop=True,
                       augment=True,
@@ -39,7 +41,7 @@ results = model.train(data="/home/ec2-user/dev/ctx-logoface-detector/fusiondetec
                       verbose=True,
                       save_json=False,
                       # weight_decay=	0.0005*2,
-                      # freeze=[i for i in range(0, 2)],
+                      freeze=[i for i in range(0, 5)],
                       visualize=True,
                       # translate=0.1,
                       # scale=0.1,

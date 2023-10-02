@@ -189,8 +189,10 @@ class ConfusionMatrix:
         self.task = task
         self.matrix = np.zeros((nc + 1, nc + 1)) if self.task == 'detect' else np.zeros((nc, nc))
         self.nc = nc  # number of classes
-        self.conf = 0.25 if conf in (None, 0.001) else conf  # apply 0.25 if default val conf is passed
+        # self.conf = 0.25 if conf in (None, 0.001) else conf # apply 0.25 if default val conf is passed
+        self.conf = 0.1 if conf in (None, 0.001) else conf
         self.iou_thres = iou_thres
+        print("ConfusionMatrix initialized with conf: ", self.conf, " and iou_thres: ", self.iou_thres)
 
     def process_cls_preds(self, preds, targets):
         """
@@ -260,6 +262,14 @@ class ConfusionMatrix:
         fp = self.matrix.sum(1) - tp  # false positives
         # fn = self.matrix.sum(0) - tp  # false negatives (missed detections)
         return (tp[:-1], fp[:-1]) if self.task == 'detect' else (tp, fp)  # remove background class if task=detect
+    
+    def tp_fp_fn(self):
+        """Returns true positives and false positives."""
+        tp = self.matrix.diagonal()  # true positives
+        fp = self.matrix.sum(1) - tp  # false positives
+        fn = self.matrix.sum(0) - tp  # false negatives (missed detections)
+        return (tp[:-1], fp[:-1], fn[-1]) if self.task == 'detect' else (tp, fp, fn)  # remove background class if task=detect
+
 
     @TryExcept('WARNING ⚠️ ConfusionMatrix plot failure')
     @plt_settings()

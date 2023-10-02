@@ -1,0 +1,187 @@
+{
+    "description": [
+        {
+            "name": "downloader",
+            "args": {
+                "input_queue": null,
+                "output_queue": "downloader"
+            }
+        },
+        {
+            "name": "run_frame_extractor",
+            "args": {
+                "input_queue": "downloader",
+                "output_queue": "run_frame_extractor",
+                "max_workers": 2
+            }
+        },
+        {
+            "name": "frame_resizer",
+            "args": {
+                "input_queue": "run_frame_extractor",
+                "output_queue": "frame_resizer",
+                "target_size": 416
+            }
+        },
+        {
+            "name": "detector",
+            "args": {
+                "input_queue": "frame_resizer",
+                "output_queue": "detector",
+                "model_path": "models/detector/0-2023_09_27-fusion_detection_yolov8_dynamic_20230926_torchscript/detector_yolov8s_facelogo.torchscript",
+                "batchsize": 16,
+                "detection_min_size_percentage": {
+                    "face": 0.04,
+                    "logo": 0.01
+                },
+                "confidence_threshold": {
+                    "face": 0.4,
+                    "logo": 0.1
+                },
+                "is_fusion": true
+            }
+        },
+        {
+            "name": "box_filter",
+            "args": {
+                "input_queue": "detector",
+                "output_queue": "box_filter-logo",
+                "semantic_list": [
+                    "90020"
+                ]
+            }
+        },
+        {
+            "name": "box_cropper",
+            "args": {
+                "input_queue": "box_filter-logo",
+                "output_queue": "box_cropper-logo",
+                "target_shape": [
+                    96,
+                    96
+                ],
+                "padding": true
+            }
+        },
+        {
+            "name": "crop_blur_detector",
+            "args": {
+                "input_queue": "box_cropper-logo",
+                "output_queue": "crop_blur_detector-logo",
+                "blur_threshold": 200
+            }
+        },
+        {
+            "name": "encoder",
+            "args": {
+                "input_queue": "crop_blur_detector-logo",
+                "output_queue": "encoder-logo",
+                "model_path": "models/encoder/0-2023_09_27-Logos_March_21_Resnet_29_4_e_96_27_20210416_tf",
+                "crop_shape": [
+                    128,
+                    128
+                ],
+                "batchsize": 16
+            }
+        },
+        {
+            "name": "box_tracker_with_encoding",
+            "args": {
+                "input_queue": "encoder-logo",
+                "output_queue": "box_tracker_with_encoding-logo"
+            }
+        },
+        {
+            "name": "box_matcher",
+            "args": {
+                "input_queue": "box_tracker_with_encoding-logo",
+                "output_queue": "box_matcher-logo",
+                "tree_path": "models/encoders/logos/Logos_March_21_Resnet_29_4_e_96_27-20210416-tf/trees/latest",
+                "feature_size": 128,
+                "auto_valid_threshold": 0.7,
+                "cache_valid_threshold": 500
+            }
+        },
+        {
+            "name": "tracks_validator",
+            "args": {
+                "input_queue": "box_matcher-logo",
+                "output_queue": "tracks_validator-logo",
+                "queue_size": 512
+            }
+        },
+        {
+            "name": "box_filter",
+            "args": {
+                "input_queue": "detector",
+                "output_queue": "box_filter-celeb",
+                "semantic_list": [
+                    "134533"
+                ]
+            }
+        },
+        {
+            "name": "box_cropper",
+            "args": {
+                "input_queue": "box_filter-celeb",
+                "output_queue": "box_cropper-celeb",
+                "target_shape": [
+                    128,
+                    128
+                ],
+                "upscale_factor": 1.5,
+                "padding": false
+            }
+        },
+        {
+            "name": "encoder",
+            "args": {
+                "input_queue": "box_cropper-celeb",
+                "output_queue": "encoder-celeb",
+                "model_path": "models/encoder/0-2023_09_27-resnetX4_v1_20200708_tf",
+                "crop_shape": [
+                    128,
+                    128
+                ],
+                "batchsize": 16
+            }
+        },
+        {
+            "name": "box_tracker_with_encoding",
+            "args": {
+                "input_queue": "encoder-celeb",
+                "output_queue": "box_tracker_with_encoding-celeb"
+            }
+        },
+        {
+            "name": "box_matcher",
+            "args": {
+                "input_queue": "box_tracker_with_encoding-celeb",
+                "output_queue": "box_matcher-celeb",
+                "tree_path": "models/encoders/celebrities/resnetX4_v1-20200708-tf/trees/latest",
+                "feature_size": 512
+            }
+        },
+        {
+            "name": "tracks_validator",
+            "args": {
+                "input_queue": "box_matcher-celeb",
+                "output_queue": "tracks_validator-celeb",
+                "queue_size": 512
+            }
+        },
+        {
+            "name": "api_export",
+            "args": {
+                "input_queue": [
+                    "tracks_validator-logo",
+                    "tracks_validator-celeb"
+                ],
+                "output_queue": "api_export"
+            }
+        }
+    ],
+    "image": "compute-gpu.3.8",
+    "information": "Pipeline for fusion logo and celebrity detection",
+    "nb_prefetch": 600
+}

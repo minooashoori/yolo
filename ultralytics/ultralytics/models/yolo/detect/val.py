@@ -166,6 +166,9 @@ class DetectionValidator(BaseValidator):
                                            names=self.names.values(),
                                            normalize=normalize,
                                            on_plot=self.on_plot)
+            self.confusion_matrix.print()
+            # tp, fp, fn = self.confusion_matrix.tp_fp_fn()
+            
 
     def _process_batch(self, detections, labels):
         """

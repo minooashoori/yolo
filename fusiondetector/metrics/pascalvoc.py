@@ -375,7 +375,7 @@ def main(args):
     acc_AP, validClasses, results = process_precision_recall_curves(evaluator, allBoundingBoxes, iouThreshold, savePath, showPlot)
 
     mAP = acc_AP / validClasses
-    results["mAP"] = mAP
+    results["mAP"] = float(mAP)
     results = process_prec_recall_at_threshold(prec_recall_evaluator, conf, allBoundingBoxes, iouThreshold, results)
 
     with open(os.path.join(savePath, 'results.yaml'), 'w') as f:

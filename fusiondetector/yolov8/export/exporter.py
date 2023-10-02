@@ -55,12 +55,13 @@ class Exporter:
 
 
 if __name__ == "__main__":
-    import os
-    # read yaml metadata as dict
+    # import os
+    # # read yaml metadata as dict
     with open("/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/yolov8/export/metadata/yolov8s.yaml", 'r') as stream:
         metadata = yaml.safe_load(stream)
-    print(metadata)
     exporter = Exporter()
-    exporter.load("/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.pt")
-    exporter.export(format="torchscript", half=True, dynamic=False, batch=32, device="cuda", simplify=True, metadata=metadata)
+    exporter.load("/home/ec2-user/dev/yolo/runs/detect/train14/weights/best.pt")
+    exporter.export(format="torchscript", half=True, dynamic=False, batch=32, device="cpu", simplify=True, metadata=metadata)
 
+    # model = YOLO("/home/ec2-user/dev/yolo/runs/detect/train14/weights/epoch4.pt")
+    # model.val(conf=0.1, half=True)

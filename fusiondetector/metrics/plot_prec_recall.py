@@ -66,15 +66,15 @@ def plot_prec_or_recall_conf_all(prod_data, dev_data, m: str, proposed_confidenc
 
     plt.xlabel("confidence")
     #invert x axis if we are plotting precision
-    if m == "precision":
-        plt.gca().invert_xaxis()
+    # if m == "precision":
+    #     plt.gca().invert_xaxis()
     plt.ylabel(m)
     # add mAP for prod and dev on the top of the plot
     plt.title(f"mAP: prod: {round(prod_data['mAP'], 2)} - {model}: {round(dev_data['mAP'], 2)}")
     plt.legend()
     plt.grid()
     # add saved dir
-    plt.savefig(os.path.join(save_dir, f"{m}_conf_{c}.png"))
+    plt.savefig(os.path.join(save_dir, f"{c}_{m}_conf-{args.suffix}.png"))
     plt.show()
     plt.clf()
 
@@ -92,7 +92,7 @@ def plot_prec_recall_all(prod_data, dev_data, save_dir, model:str, c):
     plt.legend()
     plt.grid()
     #add saved dir
-    plt.savefig(os.path.join(save_dir, f"prec_recall_{c}.png"))
+    plt.savefig(os.path.join(save_dir, f"{c}_prec_recall-{args.suffix}.png"))
     plt.show()
     plt.clf()
 
@@ -139,18 +139,19 @@ def main(args):
     plot_prec_recall_all(data_prod, data_dev, args.save_dir, args.model, args.c)
     print(proposed_confidence_th)
     # save the proposed confidences
-    with open(os.path.join(args.save_dir, f"proposed_confs_{args.c}.yaml"), "w") as f:
+    with open(os.path.join(args.save_dir, f"{args.c}_proposed_confs-{args.suffix}.yaml"), "w") as f:
         yaml.dump(proposed_confidence_th, f)
 
 
 if __name__ == "__main__":
 
     args = argparse.ArgumentParser()
-    args.add_argument("--prod", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/save/prod_face.yaml")
-    args.add_argument("--dev", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/save/yolov8m_face_t1.yaml")
-    args.add_argument("--save_dir", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/metrics/plots")
+    args.add_argument("--prod", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/metrics/save/prod_face.yaml")
+    args.add_argument("--dev", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/metrics/save/yolov8s_t14_face.yaml")
+    args.add_argument("--save_dir", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/metrics/plots")
     args.add_argument("--c",  type=str, default="face")
-    args.add_argument("--model",  type=str, default="yolov8m")
+    args.add_argument("--model",  type=str, default="yolov8s")
+    args.add_argument("--suffix",  type=str, default="t14")
 
     args = args.parse_args()
 

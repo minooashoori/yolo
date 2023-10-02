@@ -40,7 +40,7 @@ python pascalvoc.py --gt /home/ec2-user/dev/data/widerface/gts_preds/gts --det /
 
 # Trained Models
 
-## Train69 (YOLOv8s) ** problem with false detections of logos on plain images!
+<!-- ## Train69 (YOLOv8s) ** problem with false detections of logos on plain images!
 
 ### Logo (Threshold: 0.25)
 
@@ -222,5 +222,31 @@ python pascalvoc.py --gt /home/ec2-user/dev/data/widerface/gts_preds/gts --det /
   - Recall: 0.44
 
 - Confidence (conf): 0.1
-  - Precision: 0.79
-  - Recall: 0.46
+  - Precision: 0.79 -->
+  <!-- - Recall: 0.46 -->
+
+## Train14 (Yolov8s) - best
+
+### Logo
+AP: 70.06% (1) th: 0.1
+[{'class': '1', 'precision': 0.42, 'recall': 0.78}]
+
+AP: 70.06% (1), th: 0.15
+[{'class': '1', 'precision': 0.5, 'recall': 0.75}]
+
+### Face
+AP: 49.01% (0), th: 0.1
+[{'class': '0', 'precision': 0.76, 'recall': 0.46}]
+
+AP: 49.01% (0), th: 0.15
+[{'class': '0', 'precision': 0.83, 'recall': 0.43}]
+
+## Train7 (Yolov8s) - epoch5
+
+### Logo
+AP: 68.83% (1), th: 0.1
+[{'class': '1', 'precision': 0.5, 'recall': 0.74}]
+
+### Face
+AP: 49.02% (0), th: 0.1
+[{'class': '0', 'precision': 0.77, 'recall': 0.46}]

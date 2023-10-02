@@ -532,17 +532,22 @@ if __name__ == '__main__':
 
 
     bs = 3
-    img_path = os.path.join(IMAGES_DIR, "bus.jpg")
+    img_path = os.path.join(IMAGES_DIR, "tiktok.png")
     # model_path = os.path.join(ARTIFACTS_DIR, "yolov8m_t0_epoch4.torchscript")
-    model_path = "/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.torchscript"
-    device = "cuda"
+    # model_path = "/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.torchscript"
+    # model_path = "/home/ec2-user/dev/yolo/runs/detect/train8/weights/epoch55.torchscript"
+    # model_path = "/home/ec2-user/dev/yolo/runs/detect/train11/weights/epoch14.torchscript"
+    # model_path = "/home/ec2-user/dev/yolo/runs/detect/train11/weights/last.torchscript"
+    model_path = "/home/ec2-user/dev/yolo/runs/detect/train14/weights/best.torchscript"
+    device = "cpu"
     imgsz = 416
 
     # Import and initialize the FusionFaceLogoDetector class with the specified model path and device.
     detector = FusionDetector(model_path = model_path,
                             device = device,
                             batch_size = bs,
-                            box_min_perc = {'logo': 0.01, 'face': 0.02})
+                            conf_thrs=0.15,
+                            box_min_perc = {'logo': 0.01, 'face': 0.01})
 
     # Open the input image, convert it to RGB, and convert it to a numpy array.
     img = np.array(Image.open(img_path).convert("RGB"))
