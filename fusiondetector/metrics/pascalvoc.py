@@ -362,7 +362,6 @@ def process_prec_recall_at_threshold(prec_recall_evaluator, conf, allBoundingBox
     return results
 
 
-
 def main(args):
 
     iouThreshold, conf, gtFormat, detFormat, gtFolder, gtCoordType, detCoordType, imgSize, detFolder, savePath, showPlot = process_args(args)

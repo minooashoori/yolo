@@ -50,7 +50,7 @@ def inference(args):
         raise ValueError(f"Invalid class {args.c}")
 
     model = YOLO(args.model)
-    results = model(args.imgs, stream=True, conf=0.01, verbose=False, half=True, device="cuda:0")
+    results = model(args.imgs, stream=True, conf=0.12, verbose=False, half=True, device="cuda:0")
     show = args.show
 
     os.makedirs(args.det, exist_ok=True)
@@ -74,6 +74,8 @@ def inference(args):
 
         pbar.update(1)
         count += 1
+        if count == 500:
+            break
 
     if img_list:
         # do this for 5 batches of 25 images
@@ -110,14 +112,14 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="/home/ec2-user/dev/yolo/runs/detect/train7/weights/epoch5.pt")
-    parser.add_argument("--imgs", type=str, default="/home/ec2-user/dev/data/logo05/yolo/images/test")
-    # parser.add_argument("--imgs", type=str, default="/home/ec2-user/dev/data/widerface/unzip/val")
-    parser.add_argument("--gt", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/gts")
-    # parser.add_argument("--gt", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/gts")
-    parser.add_argument("--det", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolov8s_t7")
-    # parser.add_argument("--det", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/preds_yolov8s_t7")
-    parser.add_argument("--c", type=str, default="logo")
+    parser.add_argument("--model", type=str, default="/home/ec2-user/dev/yolo/runs/detect/train14/weights/best.pt")
+    # parser.add_argument("--imgs", type=str, default="/home/ec2-user/dev/data/logo05/yolo/images/test")
+    parser.add_argument("--imgs", type=str, default="/home/ec2-user/dev/data/widerface/unzip/val")
+    # parser.add_argument("--gt", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/gts")
+    parser.add_argument("--gt", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/gts")
+    # parser.add_argument("--det", type=str, default="/home/ec2-user/dev/data/logo05/annotations/gts_preds/preds_yolov8s_t14")
+    parser.add_argument("--det", type=str, default="/home/ec2-user/dev/data/widerface/gts_preds/preds_yolov8s_t14")
+    parser.add_argument("--c", type=str, default="face")
     parser.add_argument("--show", action="store_true", default=True)
     parser.add_argument("--conf", type=float, default=0.1)
     parser.add_argument("--iou", type=float, default=0.45)

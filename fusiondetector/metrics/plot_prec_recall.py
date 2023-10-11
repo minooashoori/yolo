@@ -97,7 +97,7 @@ def plot_prec_recall_all(prod_data, dev_data, save_dir, model:str, c):
     plt.clf()
 
 
-def get_confidence_threshold(prod_data, dev_data):
+def get_confidence_threshold(prod_data, dev_data, prec_target_value, recall_target_value):
 
     proposed_confs = {}
     # get the mininum precision of prod
@@ -109,8 +109,8 @@ def get_confidence_threshold(prod_data, dev_data):
         recall_prod = metric["recall"]
 
         # get the targets from prod
-        prec_target_value = min(precision_prod)
-        recall_target_value = max(recall_prod)
+        prec_target_value = min(precision_prod) if prec_target_value is None else prec_target_value
+        recall_target_value = max(recall_prod) if recall_target_value is None else recall_target_value
 
         # get the precision for the target precision
         precision_dev = dev_metrics[cl]["precision"]
@@ -133,7 +133,7 @@ def get_confidence_threshold(prod_data, dev_data):
 def main(args):
     data_prod = get_data(args.prod)
     data_dev = get_data(args.dev)
-    proposed_confidence_th = get_confidence_threshold(data_prod, data_dev)
+    proposed_confidence_th = get_confidence_threshold(data_prod, data_dev, args.prec_target_value, args.recall_target_value)
     plot_prec_or_recall_conf_all(data_prod, data_dev, "precision", proposed_confidence_th, args.save_dir, args.model, args.c)
     plot_prec_or_recall_conf_all(data_prod, data_dev, "recall", proposed_confidence_th, args.save_dir, args.model, args.c)
     plot_prec_recall_all(data_prod, data_dev, args.save_dir, args.model, args.c)
@@ -146,12 +146,14 @@ def main(args):
 if __name__ == "__main__":
 
     args = argparse.ArgumentParser()
-    args.add_argument("--prod", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/metrics/save/prod_face.yaml")
-    args.add_argument("--dev", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/metrics/save/yolov8s_t14_face.yaml")
+    args.add_argument("--prod", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/metrics/save/prod_logo.yaml")
+    args.add_argument("--dev", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/metrics/save/yolov8s_t14_logo.yaml")
     args.add_argument("--save_dir", type=str, default="/home/ec2-user/dev/ctx-logoface-detector/fusiondetector/metrics/plots")
-    args.add_argument("--c",  type=str, default="face")
+    args.add_argument("--c",  type=str, default="logo")
     args.add_argument("--model",  type=str, default="yolov8s")
     args.add_argument("--suffix",  type=str, default="t14")
+    args.add_argument("--prec_target_value",  type=float, default=0.59)
+    args.add_argument("--recall_target_value",  type=float, default=0.72)
 
     args = args.parse_args()
 
