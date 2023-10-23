@@ -1,0 +1,11 @@
+path: data/newfusion/merge/yolo_manual
+train: images/train
+val: images/val # has the same val as logo05fusion
+
+# number of classes
+nc: 2
+
+# class names
+names:
+  0: 'face'
+  1: 'logo'

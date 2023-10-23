@@ -1,0 +1,13 @@
+# train56: nano, best map, tfusion+logodet3k, started from train36,volcanic-yogurt-23
+# train36: nano, best map, tfusion, bumbling-cloud
+# train39: med, best map, tfusion+logodet3k, started from coco , super-dew-25
+# train51: med, best map, logo05fusion, epoch59 best perf
+model: yolov8m
+- run: train
+- epoch: 4
+- ft: train51
+model: yolov8s
+- run: train
+- epoch: best
+- ft: train82/train74
+

@@ -160,5 +160,10 @@ cython_debug/
 #.idea/
 
 .databricks
-data/
 .vscode/
+wandb/
+.DS_Store
+.idea/
+*.pt
+outputs/*.jpg
+```

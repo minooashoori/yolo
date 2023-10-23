@@ -1,0 +1,12 @@
+path: data
+train: portal/yolo/images/train
+val: logo05fusionplusmanual/yolo/images/val
+test: portal/yolo/images/test
+
+# number of classes
+nc: 2
+
+# class names
+names:
+  0: 'face'
+  1: 'logo'

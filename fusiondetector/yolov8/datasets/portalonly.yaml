@@ -1,0 +1,11 @@
+path: data
+train: portal/yolo/images/train
+val: portal/yolo/images/val
+
+# number of classes
+nc: 2
+
+# class names
+names:
+  0: 'face'
+  1: 'logo'
