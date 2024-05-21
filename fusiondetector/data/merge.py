@@ -2,6 +2,7 @@ import os
 import glob
 import shutil
 from tqdm import tqdm
+from typing import List
 
 class MergeImgDataset:
 
@@ -88,9 +89,38 @@ class MergeImgDataset:
             self._copy_files(labelsB, os.path.join(self.output_labels_folder, split), "B_")
 
 
-    def merge(self, splits=list[str],
-            includeA=["train", "val", "test"],
-            includeB=["train", "val", "test"]):
+    # def merge(self, splits=list[str],
+    #         includeA=["train", "val", "test"],
+    #         includeB=["train", "val", "test"]):
+    #     # get train folders in the two datasets
+    #     train_foldersA = self._list_subfolders(self.datasetA_path, "train") if "train" in includeA else None
+    #     train_foldersB = self._list_subfolders(self.datasetB_path, "train") if "train" in includeB else None
+
+    #     # get val folders in the two datasets
+    #     val_foldersA = self._list_subfolders(self.datasetA_path, "val") if "val" in includeA else None
+    #     val_foldersB = self._list_subfolders(self.datasetB_path, "val") if "val" in includeB else None
+
+    #     # get test folders in the two datasets
+    #     test_foldersA = self._list_subfolders(self.datasetA_path, "test") if "test" in includeA else None
+    #     test_foldersB = self._list_subfolders(self.datasetB_path, "test") if "test" in includeB else None
+
+
+    #     if "train" in splits:
+    #         # copy train images and labels
+    #         self._copy_and_prefix(train_foldersA, train_foldersB, "train")
+    #     if "val" in splits:
+    #         # copy val images and labels
+    #         self._copy_and_prefix(val_foldersA, val_foldersB, "val")
+    #     if "test" in splits:
+    #         # copy test images and labels
+    #         self._copy_and_prefix(test_foldersA, test_foldersB, "test")
+
+    def merge(self, splits: List[str] = None,
+              includeA: List[str] = ["train", "val", "test"],
+              includeB: List[str] = ["train", "val", "test"]):
+        if splits is None:
+            splits = []
+        
         # get train folders in the two datasets
         train_foldersA = self._list_subfolders(self.datasetA_path, "train") if "train" in includeA else None
         train_foldersB = self._list_subfolders(self.datasetB_path, "train") if "train" in includeB else None
@@ -103,7 +133,6 @@ class MergeImgDataset:
         test_foldersA = self._list_subfolders(self.datasetA_path, "test") if "test" in includeA else None
         test_foldersB = self._list_subfolders(self.datasetB_path, "test") if "test" in includeB else None
 
-
         if "train" in splits:
             # copy train images and labels
             self._copy_and_prefix(train_foldersA, train_foldersB, "train")
@@ -115,12 +144,11 @@ class MergeImgDataset:
             self._copy_and_prefix(test_foldersA, test_foldersB, "test")
 
 
-
 if __name__ == "__main__":
 
     merge = MergeImgDataset(
-        datasetA_path="/home/ec2-user/dev/data/newfusion/merge/yolo_manual",
-        datasetB_path="/home/ec2-user/dev/data/logodet3k/yolo",
-        output_folder="/home/ec2-user/dev/data/newfusion_logodet3k")
+        datasetA_path="/home/ubuntu/dev/data/logo05&det3k",
+        datasetB_path="/home/ubuntu/dev/data/logofusion02/yolo",
+        output_folder="/home/ubuntu/dev/data/logo05&det3k&fusion02")
 
-    merge.merge(splits=["train", "val"], includeA=["train", "val"], includeB=["train"])
+    merge.merge(splits=["train", "val"], includeA=["train", "val"], includeB=["train", "val"])

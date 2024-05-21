@@ -1,0 +1,3 @@
+fitness,lr0,lrf,momentum,weight_decay,warmup_epochs,warmup_momentum,box,cls,dfl,hsv_h,hsv_s,hsv_v,degrees,translate,scale,shear,perspective,flipud,fliplr,mosaic,mixup,copy_paste
+0.0,0.01,0.01,0.937,0.0005,3.0,0.8,7.5,0.5,1.5,0.015,0.7,0.4,0.0,0.1,0.5,0.0,0.0,0.0,0.5,1.0,0.0,0.0
+0.0,0.01132,0.00808,0.937,0.0005,2.90416,0.8,6.56436,0.43357,1.60969,0.01559,0.84608,0.4,0.0,0.08727,0.55693,0.0,0.0,0.0,0.47025,1.0,0.0,0.0

@@ -5,11 +5,84 @@ import shutil
 import glob
 import random
 import json
+import sys
 
-from fusiondetector.utils.boxes import plot_boxes
+# from fusiondetector.utils.boxes import plot_boxes
 from torch.utils.data import DataLoader
 
 os.environ['AWS_PROFILE'] = 'saml'
+
+def plot_boxes(path_or_img, boxes=None, annotation=None, box_type="yolo", save=False, is_normalized=True, scores=None, output_dir=None):
+
+    if boxes is None and annotation is None:
+        raise ValueError("Either boxes or annotation must be provided.")
+    if boxes is not None and annotation is not None:
+        raise ValueError("Only one of boxes or annotation must be provided.")
+
+    assert box_type in ["yolo", "xywh", "xyxy"], "box_type must be one of: 'yolo', 'xywh', 'xyxy'"
+
+    if scores is not None:
+        assert len(scores) == len(boxes), "scores and boxes must have the same length"
+
+
+    if annotation is not None:
+        boxes = get_boxes_from_annotation(annotation)
+    else:
+        boxes = [[0] + box if len(box) != 5 else box for box in boxes]
+
+    categories = set(box[0] for box in boxes)
+    n_categories = len(categories)
+
+    if isinstance(path_or_img, str):
+        img = Image.open(path_or_img)
+    elif isinstance(path_or_img, np.ndarray):
+        if path_or_img.max() <= 1.0:
+            path_or_img = (path_or_img * 255).astype(np.uint8)
+        img = Image.fromarray(path_or_img)
+    elif isinstance(path_or_img, Image.Image):
+        img = path_or_img
+
+
+    width, height = img.size
+
+    # create colors for each category
+    colors_list = sns.color_palette("hls", n_categories)
+    # create a map from category to color
+    colors = {category: color for category, color in zip(categories, colors_list)}
+    # we need to make the figure and the axes
+    fig, ax = plt.subplots(1)
+
+    ax.imshow(img)
+    if len(boxes) > 0:
+        for box_ in boxes:
+
+            category, box = box_[0], box_[1:]
+            if box_type == "yolo":
+                # x1, y1, w, h = make_patch_format(box, width, height)
+                x1, y1, w, h = transf_any_box(box, input_type="yolo", output_type="xywh")
+            elif box_type == "xyxy":
+                x1, y1, w, h = transf_any_box(box, input_type="xyxy", output_type="xywh")
+            else:
+                x1, y1, w, h = box
+            color = colors[category]
+            if is_normalized:
+                x1, y1, w, h = x1*width, y1*height, w*width, h*height
+            # create a rectangle patch
+            rect = patches.Rectangle((x1, y1), w, h, linewidth=2, edgecolor=color, facecolor='none')
+            if scores:
+                # plot scores on top of the boxes if provided
+                ax.text(x1, y1, fr"$\mathbf{{{round(scores[boxes.index(box_)], 2)}}}$", fontsize=12, color=color)
+
+            # add the patch to the axes
+            ax.add_patch(rect)
+    plt.axis('off')
+    if save:
+        output_dir = output_dir or os.getcwd()
+        filename = os.path.join(output_dir, 'boxes.jpg')
+        print(f"Figure exported to \033[1m{filename}\033[0;0m")
+        plt.savefig(filename, bbox_inches='tight', pad_inches=0, dpi=300)
+    plt.show()
+    
 
 class ImageDataset:
 
@@ -241,19 +314,6 @@ class TotalFusionDataset(ImageDataset):
         super().__init__(name, input_path)
         self.name = "totalfusion"
 
-
-class LogoDet3KDataset(ImageDataset):
-
-    def __init__(self, split: str, input_path: str) -> None:
-        super().__init__(split, input_path)
-        self.name = "logodet3k"
-
-class Logo05Dataset(ImageDataset):
-
-    def __init__(self, split: str, input_path: str) -> None:
-        super().__init__(split, input_path)
-        self.name = "logo05"
-
 class Logo05FusionDataset(ImageDataset):
 
     def __init__(self, split: str, input_path: str) -> None:
@@ -271,7 +331,30 @@ class NewFusionDataset(ImageDataset):
     def __init__(self, split: str, input_path: str) -> None:
         super().__init__(split, input_path)
         self.name = "newfusion"
+        
+class TiktokDataset(ImageDataset):
 
+    def __init__(self, split: str, input_path: str) -> None:
+        super().__init__(split, input_path)
+        self.name = "tiktok"
+
+class LogoFusion02Dataset(ImageDataset):
+
+    def __init__(self, split: str, input_path: str) -> None:
+        super().__init__(split, input_path)
+        self.name = "logofusion02"
+        
+class LogoDet3KDataset(ImageDataset):
+
+    def __init__(self, split: str, input_path: str) -> None:
+        super().__init__(split, input_path)
+        self.name = "logodet3k"
+
+class Logo05Dataset(ImageDataset):
+
+    def __init__(self, split: str, input_path: str) -> None:
+        super().__init__(split, input_path)
+        self.name = "logo05"
 
 if  __name__ == "__main__":
 
@@ -305,21 +388,22 @@ if  __name__ == "__main__":
 
     # logodet3k_train = LogoDet3KDataset(
     #     split="train",
-    #     input_path="s3://mls.us-east-1.innovation/pdacosta/data/logodet_3k/annotations/parquet/train/"
+    #     input_path="s3://mls.us-east-1.innovation/Minoo/data/logodet_3k/train/3labels/parquet/"
     # )
     # logodet3k_train.download(input_format="parquet",
     #                        url_col="uri",
+    #                        annotation_col="labels",
     #                        overwrite=False)
     # logodet3k_train.format_yolo()
     
     # logo05_test =  Logo05Dataset(
     #     split="test",
-    #     input_path="s3://mls.us-east-1.innovation/pdacosta/data/logo05/annotations/gts_preds/parquet/xywh/test/"
+    #     input_path="s3://mls.us-east-1.innovation/Minoo/data/logo05/3labels/parquet/"
     # )
     # logo05_test.download(input_format="parquet",
     #                       url_col="uri",
     #                       resize_mode="no",
-    #                       annotation_col=None,
+    #                       annotation_col="labels",
     #                       overwrite=False
     # )
     # logo05_test.format_yolo(overwrite=True, keep_original_filenames=True)
@@ -372,12 +456,60 @@ if  __name__ == "__main__":
     # portal_test.format_yolo(overwrite=True, keep_original_filenames=True, get_original_url_width_height=False)
     
     
-    new_fusion_train = NewFusionDataset(
-        split="train",
-        input_path = "s3://mls.us-east-1.innovation/pdacosta/data/fusion/annotations/parquet/logo_05/train/",
+    # new_fusion_train = NewFusionDataset(
+    #     split="train",
+    #     # input_path = "s3://mls.us-east-1.innovation/pdacosta/data/fusion/annotations/parquet/logo_05/train/",
+    #     input_path = "s3://mls.us-east-1.innovation/Minoo/data/logo05/3labels/parquet/",
+
+    # )
+    # new_fusion_train.download(input_format="parquet",
+    #                             url_col="uri",
+    #                             annotation_col="labels",
+    #                             overwrite=True)
+    # new_fusion_train.format_yolo(overwrite=True)
+    
+    new_fusion_train = TiktokDataset(
+        split="val",
+        # input_path = "s3://mls.us-east-1.innovation/pdacosta/data/fusion/annotations/parquet/logo_05/train/",
+        input_path = "s3://mls.us-east-1.innovation/Minoo/data/tiktok/3labels_val/",
+
     )
     new_fusion_train.download(input_format="parquet",
-                                url_col="s3_uri",
-                                annotation_col="yolo_annotations",
+                                url_col="uri",
+                                annotation_col="labels",
                                 overwrite=True)
     new_fusion_train.format_yolo(overwrite=True)
+    # new_fusion_train = LogoFusion02Dataset(
+    #     split="val",
+    #     # input_path = "s3://mls.us-east-1.innovation/pdacosta/data/fusion/annotations/parquet/logo_05/train/",
+    #     input_path = "s3://mls.us-east-1.innovation/Minoo/data/logofusion02/3labels_val/",
+
+    # )
+    # new_fusion_train.download(input_format="parquet",
+    #                             url_col="uri",
+    #                             annotation_col="labels",
+    #                             overwrite=True)
+    # new_fusion_train.format_yolo(overwrite=True)
+    # # new_fusion_train = LogoDet3KDataset(
+    #     split="test",
+    #     # input_path = "s3://mls.us-east-1.innovation/pdacosta/data/fusion/annotations/parquet/logo_05/train/",
+    #     input_path = "s3://mls.us-east-1.innovation/Minoo/data/logodet_3k/test/3labels/parquet/",
+
+    # )
+    # new_fusion_train.download(input_format="parquet",
+    #                             url_col="uri",
+    #                             annotation_col="labels",
+    #                             overwrite=True)
+    # new_fusion_train.format_yolo(overwrite=True)
+    
+    # new_fusion_train = Logo05Dataset(
+    #     split="train",
+    #     # input_path = "s3://mls.us-east-1.innovation/pdacosta/data/fusion/annotations/parquet/logo_05/train/",
+    #     input_path = "s3://mls.us-east-1.innovation/Minoo/data/logo05/3labels_train/",
+
+    # )
+    # new_fusion_train.download(input_format="parquet",
+    #                             url_col="uri",
+    #                             annotation_col="labels",
+    #                             overwrite=True)
+    # new_fusion_train.format_yolo(overwrite=True)
